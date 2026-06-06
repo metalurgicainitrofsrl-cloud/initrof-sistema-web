@@ -1,0 +1,11 @@
+.venv
+build
+dist
+tools
+*.nupkg
+*.zip
+__pycache__
+*.pyc
+data/*.sqlite
+data/backups
+data/exports
