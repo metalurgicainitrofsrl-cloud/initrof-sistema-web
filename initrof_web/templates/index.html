@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>INITROF Gestion</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <img src="{{ logo_url }}" alt="INITROF SRL" class="brand-logo">
+    <strong>INITROF SRL</strong>
+    <span>Metalurgica</span>
+    <nav>
+      <button data-view="dashboard" class="active">Panel</button>
+      <button data-view="clients">Clientes</button>
+      <button data-view="budgets">Presupuestos</button>
+      <button data-view="delivery">Remitos</button>
+      <button data-view="orders">Ordenes</button>
+      <button data-view="printing">Impresion</button>
+      <button data-view="settings">Configuracion</button>
+    </nav>
+    <a href="/logout" class="logout">Cerrar sesion</a>
+  </aside>
+
+  <main class="app">
+    <header class="topbar">
+      <div>
+        <h1 id="view-title">Panel</h1>
+        <p id="view-hint">Gestion centralizada accesible desde cualquier computadora.</p>
+      </div>
+      <div class="user-chip">{{ user.name }}</div>
+    </header>
+
+    <section id="dashboard" class="view active">
+      <div class="hero"><img src="{{ logo_url }}" alt="INITROF"></div>
+      <div class="stats" id="stats"></div>
+      <div class="grid two">
+        <article class="panel"><h2>Ultimos presupuestos</h2><div id="dash-budgets"></div></article>
+        <article class="panel"><h2>Ultimos remitos</h2><div id="dash-delivery"></div></article>
+      </div>
+    </section>
+
+    <section id="clients" class="view">
+      <div class="toolbar"><input id="client-search" placeholder="Buscar cliente"><button id="new-client">Nuevo cliente</button></div>
+      <div class="split">
+        <article class="panel"><table id="clients-table"></table></article>
+        <article class="panel"><h2>Ficha del cliente</h2><form id="client-form" class="form-grid"></form></article>
+      </div>
+    </section>
+
+    <section id="budgets" class="view">
+      <div class="toolbar"><input id="budget-search" placeholder="Buscar presupuesto"><button id="new-budget">Nuevo presupuesto</button><button id="budget-pdf">Ver PDF</button><button id="budget-convert">Convertir a remito</button></div>
+      <div class="split">
+        <article class="panel"><table id="budgets-table"></table></article>
+        <article class="panel wide-editor"><h2>Editor de presupuesto</h2><form id="budget-form"></form></article>
+      </div>
+    </section>
+
+    <section id="delivery" class="view">
+      <div class="toolbar"><input id="delivery-search" placeholder="Buscar remito"><button id="new-delivery">Nuevo remito</button><button id="delivery-pdf">Ver PDF / imprimir</button></div>
+      <div class="split">
+        <article class="panel"><table id="delivery-table"></table></article>
+        <article class="panel wide-editor"><h2>Editor de remito</h2><form id="delivery-form"></form></article>
+      </div>
+    </section>
+
+    <section id="orders" class="view">
+      <div class="toolbar"><input id="order-search" placeholder="Buscar orden"><button id="new-order">Nueva orden</button><button id="order-pdf">Ver PDF</button></div>
+      <div class="split">
+        <article class="panel"><table id="orders-table"></table></article>
+        <article class="panel"><h2>Orden de trabajo</h2><form id="order-form" class="form-grid"></form></article>
+      </div>
+    </section>
+
+    <section id="printing" class="view">
+      <div class="toolbar"><input id="print-search" placeholder="Buscar documento para reimprimir"><button id="print-open">Abrir PDF</button></div>
+      <article class="panel"><table id="print-table"></table></article>
+      <p class="hint">Los remitos generan una mascara A4 para imprimir sobre el talonario preimpreso de INITROF.</p>
+    </section>
+
+    <section id="settings" class="view">
+      <div class="grid two">
+        <article class="panel"><h2>Datos de empresa</h2><form id="company-form" class="form-grid"></form></article>
+        <article class="panel"><h2>Logo y seguridad</h2>
+          <form id="logo-form"><input type="file" name="file" accept="image/png,image/jpeg"><button>Subir logo</button></form>
+          <div class="separator"></div>
+          <label>Nueva clave</label><input id="new-password" type="password" placeholder="Minimo 8 caracteres"><button id="save-password">Cambiar clave</button>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast"></div>
+  <script>window.INITROF_TODAY = "{{ today }}";</script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

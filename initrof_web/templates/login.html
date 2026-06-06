@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>INITROF - Ingreso</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="login-page">
+  <main class="login-card">
+    <img src="/logo" alt="INITROF SRL" class="login-logo">
+    <h1>INITROF Gestion</h1>
+    <p>Sistema comercial metalurgico</p>
+    {% if error %}
+      <div class="alert danger">{{ error }}</div>
+    {% endif %}
+    <form method="post" action="/login">
+      <label>Usuario</label>
+      <input name="username" autocomplete="username" required value="admin">
+      <label>Clave</label>
+      <input name="password" type="password" autocomplete="current-password" required>
+      <button type="submit">Ingresar</button>
+    </form>
+    <small>Primer ingreso: usuario admin, clave admin123. Cambiala desde Configuracion.</small>
+  </main>
+</body>
+</html>

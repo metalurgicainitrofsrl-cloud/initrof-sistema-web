@@ -1,0 +1,252 @@
+from __future__ import annotations
+
+from datetime import date
+
+from initrof_app.core.database import session
+
+
+def fetch_company():
+    with session() as conn:
+        return dict(conn.execute("SELECT * FROM company WHERE id = 1").fetchone())
+
+
+def update_company(data: dict) -> None:
+    fields = [
+        "name", "subtitle", "cuit", "address", "phone", "whatsapp", "email", "website",
+        "iva_condition", "gross_income", "activity_start", "remito_cai", "remito_cai_due",
+        "remito_offset_x_mm", "remito_offset_y_mm", "sale_conditions", "legal_notes", "logo_path",
+    ]
+    values = [data.get(field) for field in fields]
+    with session() as conn:
+        conn.execute(
+            f"UPDATE company SET {', '.join(f'{field} = ?' for field in fields)}, updated_at = CURRENT_TIMESTAMP WHERE id = 1",
+            values,
+        )
+
+
+def list_clients(search: str = ""):
+    with session() as conn:
+        pattern = f"%{search}%"
+        rows = conn.execute(
+            """
+            SELECT * FROM clients
+            WHERE active = 1 AND (business_name LIKE ? OR trade_name LIKE ? OR cuit LIKE ? OR contact_name LIKE ?)
+            ORDER BY business_name
+            """,
+            (pattern, pattern, pattern, pattern),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+
+def save_client(data: dict) -> int:
+    fields = ["business_name", "trade_name", "cuit", "address", "city", "province", "phone", "whatsapp", "email", "contact_name", "notes"]
+    with session() as conn:
+        if data.get("id"):
+            conn.execute(
+                f"UPDATE clients SET {', '.join(f'{f} = ?' for f in fields)}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                [data.get(f) for f in fields] + [data["id"]],
+            )
+            client_id = data["id"]
+        else:
+            cur = conn.execute(
+                f"INSERT INTO clients ({', '.join(fields)}) VALUES ({', '.join('?' for _ in fields)})",
+                [data.get(f) for f in fields],
+            )
+            client_id = cur.lastrowid
+        conn.execute("INSERT INTO history(entity_type, entity_id, action, detail) VALUES ('Cliente', ?, 'Guardar', ?)", (client_id, data.get("business_name")))
+        return client_id
+
+
+def delete_client(client_id: int) -> None:
+    with session() as conn:
+        conn.execute("UPDATE clients SET active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (client_id,))
+        conn.execute("INSERT INTO history(entity_type, entity_id, action) VALUES ('Cliente', ?, 'Eliminar')", (client_id,))
+
+
+def next_number(doc_type: str) -> str:
+    key = sequence_key(doc_type)
+    with session() as conn:
+        row = conn.execute("SELECT prefix, last_number FROM number_sequences WHERE key = ?", (key,)).fetchone()
+        return format_number(row["prefix"], row["last_number"] + 1)
+
+
+def sequence_key(doc_type: str) -> str:
+    return "Orden" if doc_type in ("Orden", "Orden de Trabajo") else doc_type
+
+
+def format_number(prefix: str, value: int) -> str:
+    return f"{prefix}-{value:06d}"
+
+
+def reserve_number(conn, doc_type: str) -> str:
+    key = sequence_key(doc_type)
+    row = conn.execute("SELECT prefix, last_number FROM number_sequences WHERE key = ?", (key,)).fetchone()
+    next_value = int(row["last_number"]) + 1
+    conn.execute("UPDATE number_sequences SET last_number = ? WHERE key = ?", (next_value, key))
+    return format_number(row["prefix"], next_value)
+
+
+def save_document(doc: dict, items: list[dict]) -> int:
+    subtotal = sum(float(item["quantity"]) * float(item["unit_price"]) for item in items)
+    iva = round(subtotal * 0.21, 2)
+    total = round(subtotal + iva, 2)
+    doc["subtotal"], doc["iva"], doc["total"] = subtotal, iva, total
+    fields = ["doc_type", "number", "date", "client_id", "contact", "address", "phone", "status", "subtotal", "iva", "total", "observations", "source_document_id"]
+    with session() as conn:
+        if doc.get("id"):
+            conn.execute(
+                f"UPDATE documents SET {', '.join(f'{f} = ?' for f in fields)}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                [doc.get(f) for f in fields] + [doc["id"]],
+            )
+            doc_id = doc["id"]
+            conn.execute("DELETE FROM document_items WHERE document_id = ?", (doc_id,))
+        else:
+            conn.execute("BEGIN IMMEDIATE")
+            doc["number"] = reserve_number(conn, doc["doc_type"])
+            cur = conn.execute(
+                f"INSERT INTO documents ({', '.join(fields)}) VALUES ({', '.join('?' for _ in fields)})",
+                [doc.get(f) for f in fields],
+            )
+            doc_id = cur.lastrowid
+        conn.executemany(
+            "INSERT INTO document_items(document_id, quantity, description, unit, unit_price, subtotal) VALUES (?, ?, ?, ?, ?, ?)",
+            [(doc_id, item["quantity"], item["description"], item["unit"], item["unit_price"], float(item["quantity"]) * float(item["unit_price"])) for item in items],
+        )
+        conn.execute("INSERT INTO history(entity_type, entity_id, action, detail) VALUES (?, ?, 'Guardar', ?)", (doc["doc_type"], doc_id, doc["number"]))
+        return doc_id
+
+
+def list_documents(doc_type: str | None = None, search: str = ""):
+    where = []
+    params = []
+    if doc_type:
+        where.append("d.doc_type = ?")
+        params.append(doc_type)
+    if search:
+        where.append("(d.number LIKE ? OR c.business_name LIKE ? OR d.status LIKE ?)")
+        params.extend([f"%{search}%"] * 3)
+    sql_where = "WHERE " + " AND ".join(where) if where else ""
+    with session() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT d.*, c.business_name AS client_name, c.email AS client_email
+            FROM documents d JOIN clients c ON c.id = d.client_id
+            {sql_where}
+            ORDER BY d.date DESC, d.id DESC
+            """,
+            params,
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+
+def list_printables(search: str = ""):
+    pattern = f"%{search}%"
+    with session() as conn:
+        docs = [dict(row) for row in conn.execute(
+            """
+            SELECT d.id, d.doc_type AS item_type, d.number, d.date, c.business_name AS client_name, d.status, d.total
+            FROM documents d JOIN clients c ON c.id = d.client_id
+            WHERE d.number LIKE ? OR c.business_name LIKE ? OR d.status LIKE ?
+            """,
+            (pattern, pattern, pattern),
+        ).fetchall()]
+        orders = [dict(row) for row in conn.execute(
+            """
+            SELECT w.id, 'Orden de Trabajo' AS item_type, w.number, w.start_date AS date,
+                   c.business_name AS client_name, w.status, 0 AS total
+            FROM work_orders w JOIN clients c ON c.id = w.client_id
+            WHERE w.number LIKE ? OR c.business_name LIKE ? OR w.status LIKE ?
+            """,
+            (pattern, pattern, pattern),
+        ).fetchall()]
+    return sorted(docs + orders, key=lambda row: (row["date"], row["id"]), reverse=True)
+
+
+def get_document(document_id: int):
+    with session() as conn:
+        doc = dict(conn.execute(
+            """
+            SELECT d.*, c.business_name AS client_name, c.email AS client_email,
+                   c.cuit AS client_cuit, c.notes AS client_notes
+            FROM documents d JOIN clients c ON c.id = d.client_id
+            WHERE d.id = ?
+            """,
+            (document_id,),
+        ).fetchone())
+        items = [dict(row) for row in conn.execute("SELECT * FROM document_items WHERE document_id = ? ORDER BY id", (document_id,)).fetchall()]
+        return doc, items
+
+
+def save_work_order(data: dict) -> int:
+    fields = ["number", "client_id", "responsible", "start_date", "due_date", "status", "requested_work", "materials", "observations"]
+    with session() as conn:
+        if data.get("id"):
+            conn.execute(
+                f"UPDATE work_orders SET {', '.join(f'{f} = ?' for f in fields)}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                [data.get(f) for f in fields] + [data["id"]],
+            )
+            order_id = data["id"]
+        else:
+            conn.execute("BEGIN IMMEDIATE")
+            data["number"] = reserve_number(conn, "Orden")
+            cur = conn.execute(
+                f"INSERT INTO work_orders ({', '.join(fields)}) VALUES ({', '.join('?' for _ in fields)})",
+                [data.get(f) for f in fields],
+            )
+            order_id = cur.lastrowid
+        conn.execute("INSERT INTO history(entity_type, entity_id, action, detail) VALUES ('Orden de Trabajo', ?, 'Guardar', ?)", (order_id, data.get("number")))
+        return order_id
+
+
+def list_work_orders(search: str = ""):
+    with session() as conn:
+        rows = conn.execute(
+            """
+            SELECT w.*, c.business_name AS client_name
+            FROM work_orders w JOIN clients c ON c.id = w.client_id
+            WHERE w.number LIKE ? OR c.business_name LIKE ? OR w.status LIKE ?
+            ORDER BY w.start_date DESC, w.id DESC
+            """,
+            (f"%{search}%", f"%{search}%", f"%{search}%"),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+
+def get_work_order(order_id: int):
+    with session() as conn:
+        row = conn.execute(
+            """
+            SELECT w.*, c.business_name AS client_name, c.email AS client_email,
+                   c.address AS client_address, c.phone AS client_phone
+            FROM work_orders w JOIN clients c ON c.id = w.client_id
+            WHERE w.id = ?
+            """,
+            (order_id,),
+        ).fetchone()
+        return dict(row)
+
+
+def dashboard_stats():
+    month_prefix = date.today().strftime("%Y-%m")
+    with session() as conn:
+        return {
+            "budgets_month": conn.execute("SELECT COUNT(*) FROM documents WHERE doc_type='Presupuesto' AND date LIKE ?", (f"{month_prefix}%",)).fetchone()[0],
+            "delivery_notes": conn.execute("SELECT COUNT(*) FROM documents WHERE doc_type='Remito'").fetchone()[0],
+            "open_orders": conn.execute("SELECT COUNT(*) FROM work_orders WHERE status IN ('Pendiente','En Proceso')").fetchone()[0],
+            "active_clients": conn.execute("SELECT COUNT(*) FROM clients WHERE active=1").fetchone()[0],
+            "budget_amount": conn.execute("SELECT COALESCE(SUM(total),0) FROM documents WHERE doc_type='Presupuesto' AND date LIKE ?", (f"{month_prefix}%",)).fetchone()[0],
+            "monthly": [dict(row) for row in conn.execute(
+                """
+                SELECT substr(date,1,7) AS month, SUM(total) AS amount
+                FROM documents WHERE doc_type='Presupuesto'
+                GROUP BY substr(date,1,7) ORDER BY month LIMIT 12
+                """
+            ).fetchall()],
+            "top_clients": [dict(row) for row in conn.execute(
+                """
+                SELECT c.business_name, SUM(d.total) AS amount
+                FROM documents d JOIN clients c ON c.id=d.client_id
+                GROUP BY c.id ORDER BY amount DESC LIMIT 5
+                """
+            ).fetchall()],
+        }
