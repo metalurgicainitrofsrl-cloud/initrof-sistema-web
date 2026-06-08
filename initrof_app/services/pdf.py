@@ -19,6 +19,7 @@ DARK = colors.HexColor("#1F2933")
 RED = colors.HexColor("#D72638")
 LIGHT = colors.HexColor("#F3F6F9")
 MID = colors.HexColor("#D9E1EA")
+REMITO_BASE_OFFSET_Y_MM = 42
 
 
 def money(value: float) -> str:
@@ -170,8 +171,7 @@ def draw_preprinted_delivery_note(c: canvas.Canvas, company: dict, doc: dict, it
     """Print only variable fields over INITROF's preprinted remito form."""
     width, height = A4
     offset_x = float(company.get("remito_offset_x_mm") or 0) * mm
-    offset_y = float(company.get("remito_offset_y_mm") or 0) * mm
-
+    offset_y = (REMITO_BASE_OFFSET_Y_MM + float(company.get("remito_offset_y_mm") or 0)) * mm
     def p(x_mm: float, y_from_top_mm: float) -> tuple[float, float]:
         return x_mm * mm + offset_x, height - y_from_top_mm * mm + offset_y
 
