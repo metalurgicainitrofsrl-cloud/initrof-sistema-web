@@ -11,7 +11,7 @@ from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
 from initrof_app.core import repository as repo
-from initrof_app.core.paths import default_logo_path, exports_dir
+from initrof_app.core.paths import default_logo_path, exports_dir, resource_path
 
 
 BLUE = colors.HexColor("#0E4C92")
@@ -19,7 +19,9 @@ DARK = colors.HexColor("#1F2933")
 RED = colors.HexColor("#D72638")
 LIGHT = colors.HexColor("#F3F6F9")
 MID = colors.HexColor("#D9E1EA")
+
 REMITO_BASE_OFFSET_Y_MM = 42
+SIGNATURE_IMAGE = "resources/firma_digital.png"
 
 
 def money(value: float) -> str:
@@ -119,14 +121,15 @@ def draw_document(c: canvas.Canvas, company: dict, doc: dict, items: list[dict],
     table_header(c, margin, y, width - 2 * margin)
     y -= 8 * mm
     for item in items:
-        if y < 64 * mm:
+        item_height = item_row_height(c, width - 2 * margin, item)
+        if y - item_height < 64 * mm:
             footer(c, company, 1)
             c.showPage()
             y = height - margin
             table_header(c, margin, y, width - 2 * margin)
             y -= 8 * mm
-        draw_item(c, margin, y, width - 2 * margin, item)
-        y -= 9 * mm
+        draw_item(c, margin, y, width - 2 * margin, item, item_height)
+        y -= item_height + 2 * mm
 
     y -= 4 * mm
     totals_x = width - margin - 64 * mm
@@ -143,13 +146,18 @@ def draw_document(c: canvas.Canvas, company: dict, doc: dict, items: list[dict],
 
     obs_y = y - 38 * mm
     section_title(c, margin, obs_y, "Observaciones")
+    obs_lines = wrap_text(c, doc.get("observations") or "Sin observaciones.", "Helvetica", 9, width - 2 * margin - 10 * mm)
+    obs_box_top = obs_y - 6 * mm
+    obs_box_height = max(18 * mm, (len(obs_lines) * 5 + 6) * mm)
     c.setFillColor(LIGHT)
-    c.roundRect(margin, obs_y - 24 * mm, width - 2 * margin, 18 * mm, 2.5 * mm, fill=True, stroke=False)
+    c.roundRect(margin, obs_box_top - obs_box_height, width - 2 * margin, obs_box_height, 2.5 * mm, fill=True, stroke=False)
     c.setFillColor(DARK)
     c.setFont("Helvetica", 9)
-    c.drawString(margin + 5 * mm, obs_y - 13 * mm, (doc.get("observations") or "Sin observaciones.")[:120])
+    for idx, line in enumerate(obs_lines):
+        c.drawString(margin + 5 * mm, obs_box_top - (7 + idx * 5) * mm, line)
 
-    sig_y = obs_y - 42 * mm
+    sig_y = obs_box_top - obs_box_height - 32 * mm
+    draw_company_signature(c, margin, sig_y)
     c.setStrokeColor(MID)
     c.line(margin, sig_y, margin + 70 * mm, sig_y)
     c.line(width - margin - 70 * mm, sig_y, width - margin, sig_y)
@@ -172,6 +180,7 @@ def draw_preprinted_delivery_note(c: canvas.Canvas, company: dict, doc: dict, it
     width, height = A4
     offset_x = float(company.get("remito_offset_x_mm") or 0) * mm
     offset_y = (REMITO_BASE_OFFSET_Y_MM + float(company.get("remito_offset_y_mm") or 0)) * mm
+
     def p(x_mm: float, y_from_top_mm: float) -> tuple[float, float]:
         return x_mm * mm + offset_x, height - y_from_top_mm * mm + offset_y
 
@@ -302,18 +311,33 @@ def draw_work_order(c: canvas.Canvas, company: dict, order: dict, include_qr: bo
 
 
 def draw_wrapped(c, x, y, width, text, leading):
-    words = str(text).replace("\n", " ").split()
+    for line in wrap_text(c, text, "Helvetica", 9, width):
+        c.drawString(x, y, line)
+        y -= leading
+
+
+def wrap_text(c, text, font_name: str, font_size: int, width: float) -> list[str]:
+    words = str(text or "").replace("\n", " ").split()
+    lines: list[str] = []
     line = ""
     for word in words:
         trial = f"{line} {word}".strip()
-        if c.stringWidth(trial, "Helvetica", 9) <= width:
+        if c.stringWidth(trial, font_name, font_size) <= width:
             line = trial
-        else:
-            c.drawString(x, y, line)
-            y -= leading
-            line = word
+            continue
+        if line:
+            lines.append(line)
+            line = ""
+        while c.stringWidth(word, font_name, font_size) > width and len(word) > 1:
+            cut = len(word)
+            while cut > 1 and c.stringWidth(word[:cut], font_name, font_size) > width:
+                cut -= 1
+            lines.append(word[:cut])
+            word = word[cut:]
+        line = word
     if line:
-        c.drawString(x, y, line)
+        lines.append(line)
+    return lines or [""]
 
 
 def section_title(c, x, y, text):
@@ -335,17 +359,32 @@ def table_header(c, x, y, w):
         c.drawString(x + dx * mm, y - 4.5 * mm, label)
 
 
-def draw_item(c, x, y, w, item):
+def item_row_height(c, w, item) -> float:
+    lines = wrap_text(c, item["description"], "Helvetica", 8, 78 * mm)
+    return max(7 * mm, (len(lines) * 4 + 3) * mm)
+
+
+def draw_item(c, x, y, w, item, row_height: float | None = None):
+    row_height = row_height or item_row_height(c, w, item)
+    description_lines = wrap_text(c, item["description"], "Helvetica", 8, 78 * mm)
     c.setFillColor(colors.white)
     c.setStrokeColor(MID)
-    c.roundRect(x, y - 7 * mm, w, 7 * mm, 1.5 * mm, fill=True, stroke=True)
+    c.roundRect(x, y - row_height, w, row_height, 1.5 * mm, fill=True, stroke=True)
     c.setFillColor(DARK)
     c.setFont("Helvetica", 8)
-    c.drawRightString(x + 14 * mm, y - 4.5 * mm, f"{item['quantity']:g}")
-    c.drawString(x + 22 * mm, y - 4.5 * mm, str(item["description"])[:58])
-    c.drawString(x + 104 * mm, y - 4.5 * mm, item["unit"])
-    c.drawRightString(x + 149 * mm, y - 4.5 * mm, money(item["unit_price"]))
-    c.drawRightString(x + w - 4 * mm, y - 4.5 * mm, money(item["subtotal"]))
+    value_y = y - 4.5 * mm
+    c.drawRightString(x + 14 * mm, value_y, f"{item['quantity']:g}")
+    for idx, line in enumerate(description_lines):
+        c.drawString(x + 22 * mm, value_y - idx * 4 * mm, line)
+    c.drawString(x + 104 * mm, value_y, item["unit"])
+    c.drawRightString(x + 149 * mm, value_y, money(item["unit_price"]))
+    c.drawRightString(x + w - 4 * mm, value_y, money(item["subtotal"]))
+
+
+def draw_company_signature(c, x: float, line_y: float) -> None:
+    signature_path = resource_path(SIGNATURE_IMAGE)
+    if signature_path.exists():
+        c.drawImage(str(signature_path), x + 3 * mm, line_y + 2 * mm, width=64 * mm, height=28 * mm, mask="auto")
 
 
 def total_line(c, x, y, label, value, bold):
