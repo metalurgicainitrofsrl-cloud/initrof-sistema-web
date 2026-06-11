@@ -94,6 +94,9 @@ def save_document(doc: dict, items: list[dict]) -> int:
     fields = ["doc_type", "number", "date", "client_id", "contact", "address", "phone", "status", "subtotal", "iva", "total", "observations", "source_document_id"]
     with session() as conn:
         if doc.get("id"):
+            existing = conn.execute("SELECT number FROM documents WHERE id = ?", (doc["id"],)).fetchone()
+            if existing:
+                doc["number"] = existing["number"]
             conn.execute(
                 f"UPDATE documents SET {', '.join(f'{f} = ?' for f in fields)}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                 [doc.get(f) for f in fields] + [doc["id"]],
@@ -250,3 +253,4 @@ def dashboard_stats():
                 """
             ).fetchall()],
         }
+
