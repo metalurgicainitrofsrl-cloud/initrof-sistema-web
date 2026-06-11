@@ -52,6 +52,22 @@ def delete_document(document_id: int) -> None:
         conn.execute("DELETE FROM documents WHERE id = ?", (document_id,))
 
 
+def void_document(document_id: int) -> bool:
+    with session() as conn:
+        row = conn.execute("SELECT doc_type, number FROM documents WHERE id = ?", (document_id,)).fetchone()
+        if not row:
+            return False
+        conn.execute(
+            "UPDATE documents SET status = 'Anulado', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (document_id,),
+        )
+        conn.execute(
+            "INSERT INTO history(entity_type, entity_id, action, detail) VALUES (?, ?, 'Anular', ?)",
+            (row["doc_type"], document_id, row["number"]),
+        )
+        return True
+
+
 def dashboard_payload() -> dict:
     stats = repo.dashboard_stats()
     return {
