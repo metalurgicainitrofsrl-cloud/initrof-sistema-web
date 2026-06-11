@@ -114,6 +114,8 @@ def clients(search: str = "", user: dict = Depends(require_user)):
 @app.post("/api/clients")
 async def save_client(request: Request, user: dict = Depends(require_user)):
     data = await request.json()
+    if not str(data.get("business_name") or "").strip():
+        raise HTTPException(400, "La razon social es obligatoria")
     client_id = repo.save_client(data)
     return web_repo.get_client(client_id)
 
@@ -138,8 +140,17 @@ def document(document_id: int, user: dict = Depends(require_user)):
 @app.post("/api/documents")
 async def save_document(request: Request, user: dict = Depends(require_user)):
     payload = await request.json()
+    validate_document_payload(payload)
     doc_id = repo.save_document(payload["document"], payload["items"])
     doc, items = repo.get_document(doc_id)
+    return {"document": doc, "items": items}
+
+
+@app.post("/api/documents/{document_id}/void")
+def void_document(document_id: int, user: dict = Depends(require_user)):
+    if not web_repo.void_document(document_id):
+        raise HTTPException(404, "Documento no encontrado")
+    doc, items = repo.get_document(document_id)
     return {"document": doc, "items": items}
 
 
@@ -178,6 +189,10 @@ def order(order_id: int, user: dict = Depends(require_user)):
 @app.post("/api/orders")
 async def save_order(request: Request, user: dict = Depends(require_user)):
     payload = await request.json()
+    if not int(payload.get("client_id") or 0):
+        raise HTTPException(400, "Seleccione cliente")
+    if not str(payload.get("start_date") or "").strip():
+        raise HTTPException(400, "La fecha de inicio es obligatoria")
     order_id = repo.save_work_order(payload)
     return repo.get_work_order(order_id)
 
@@ -224,3 +239,40 @@ def order_pdf(order_id: int, user: dict = Depends(require_user)):
 @app.get("/health")
 def health():
     return {"ok": True, "data_dir": str(data_dir())}
+
+
+def validate_document_payload(payload: dict) -> None:
+    document = payload.get("document") or {}
+    items = payload.get("items") or []
+    doc_type = document.get("doc_type")
+    if doc_type not in {"Presupuesto", "Remito"}:
+        raise HTTPException(400, "Tipo de documento invalido")
+    if not str(document.get("date") or "").strip():
+        raise HTTPException(400, "La fecha es obligatoria")
+    if not int(document.get("client_id") or 0):
+        raise HTTPException(400, "Seleccione cliente")
+    clean_items = []
+    for idx, item in enumerate(items, start=1):
+        description = str(item.get("description") or "").strip()
+        if not description:
+            continue
+        try:
+            quantity = float(item.get("quantity") or 0)
+            unit_price = float(item.get("unit_price") or 0)
+        except (TypeError, ValueError):
+            raise HTTPException(400, f"Item {idx}: cantidad o precio invalido")
+        if quantity <= 0:
+            raise HTTPException(400, f"Item {idx}: la cantidad debe ser mayor a cero")
+        if unit_price < 0:
+            raise HTTPException(400, f"Item {idx}: el precio no puede ser negativo")
+        clean_items.append(
+            {
+                "quantity": quantity,
+                "description": description,
+                "unit": str(item.get("unit") or "u").strip() or "u",
+                "unit_price": unit_price,
+            }
+        )
+    if not clean_items:
+        raise HTTPException(400, "Agregue al menos un item con descripcion")
+    payload["items"] = clean_items
