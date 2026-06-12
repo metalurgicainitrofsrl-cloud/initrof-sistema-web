@@ -31,14 +31,9 @@ Publicar el sistema en `https://sistema.initrof.com.ar` para que varias computad
 
 Cambiar la clave inmediatamente desde `Configuracion`.
 
-## Remitos preimpresos
+## Remitos en hoja blanca
 
-Los remitos generan un PDF A4 con solo los datos variables para imprimir sobre el talonario preimpreso de INITROF. En `Configuracion` se pueden ajustar:
-
-- `Ajuste remito X mm`
-- `Ajuste remito Y mm`
-
-Valores positivos mueven la impresion hacia la derecha/arriba segun el eje correspondiente.
+Los remitos generan un PDF A4 completo, con encabezado, datos fiscales, datos del cliente, tabla de detalle, firma, codigo de barras y pie CAI. Se imprimen directamente sobre una hoja A4 blanca, sin talonario ni formulario preimpreso.
 
 ## Backups
 

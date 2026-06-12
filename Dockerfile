@@ -1,10 +1,14 @@
-FROM mcr.microsoft.com/devcontainers/python:1-3.12-bookworm
+FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV INITROF_DATA_DIR=/app/data
 
 WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libjpeg62-turbo zlib1g \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY requirements-web.txt /app/requirements-web.txt
 RUN pip install --no-cache-dir -r /app/requirements-web.txt
