@@ -111,6 +111,14 @@ def clients(search: str = "", user: dict = Depends(require_user)):
     return repo.list_clients(search)
 
 
+@app.get("/api/clients/{client_id}")
+def client_detail(client_id: int, user: dict = Depends(require_user)):
+    client = web_repo.get_client(client_id)
+    if not client:
+        raise HTTPException(404, "Cliente no encontrado")
+    return client
+
+
 @app.post("/api/clients")
 async def save_client(request: Request, user: dict = Depends(require_user)):
     data = await request.json()

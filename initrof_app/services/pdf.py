@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from reportlab.graphics import renderPDF
+from reportlab.graphics.barcode import code128
 from reportlab.graphics.barcode.qr import QrCodeWidget
 from reportlab.graphics.shapes import Drawing
 from reportlab.lib import colors
@@ -172,7 +173,256 @@ def draw_document(c: canvas.Canvas, company: dict, doc: dict, items: list[dict],
 
 
 def draw_delivery_note(c: canvas.Canvas, company: dict, doc: dict, items: list[dict], include_qr: bool) -> None:
-    draw_preprinted_delivery_note(c, company, doc, items)
+    draw_full_delivery_note(c, company, doc, items)
+
+
+def draw_full_delivery_note(c: canvas.Canvas, company: dict, doc: dict, items: list[dict]) -> None:
+    """Draw a complete INITROF remito form on blank A4 paper."""
+    width, _ = A4
+    left = 14 * mm
+    right = width - 14 * mm
+    top = 282 * mm
+    bottom = 22 * mm
+    form_w = right - left
+    header_bottom = 237 * mm
+    client_bottom = 207 * mm
+    sale_bottom = 191 * mm
+    table_header_bottom = 183 * mm
+    detail_bottom = 64 * mm
+    footer_top = 64 * mm
+    qty_w = 19 * mm
+    amount_w = 31 * mm
+    detail_x = left + qty_w
+    amount_x = right - amount_w
+
+    c.setStrokeColor(colors.black)
+    c.setFillColor(colors.black)
+    c.setLineWidth(0.8)
+    c.rect(left, bottom, form_w, top - bottom, stroke=True, fill=False)
+    for y in [header_bottom, client_bottom, sale_bottom, table_header_bottom, detail_bottom, footer_top]:
+        c.line(left, y, right, y)
+
+    header_split = left + 92 * mm
+    c.line(header_split, header_bottom, header_split, top)
+    draw_delivery_company_header(c, company, left, header_bottom, header_split, top)
+    draw_delivery_document_header(c, company, doc, header_split, header_bottom, right, top)
+    draw_delivery_client_block(c, doc, left, client_bottom, right, header_bottom)
+    draw_delivery_sale_block(c, company, doc, left, sale_bottom, right, client_bottom)
+
+    c.line(detail_x, detail_bottom, detail_x, sale_bottom)
+    c.line(amount_x, detail_bottom, amount_x, sale_bottom)
+    c.setFont("Helvetica-Bold", 7)
+    c.drawCentredString(left + qty_w / 2, sale_bottom - 5 * mm, "Cantidad")
+    c.drawCentredString(detail_x + (amount_x - detail_x) / 2, sale_bottom - 5 * mm, "DETALLE")
+    c.drawCentredString(amount_x + amount_w / 2, sale_bottom - 5 * mm, "IMPORTE")
+
+    draw_delivery_items(c, doc, items, left, right, table_header_bottom, detail_bottom, detail_x, amount_x)
+    draw_delivery_footer(c, company, doc, left, right, bottom, footer_top)
+
+
+def draw_delivery_company_header(c: canvas.Canvas, company: dict, left: float, bottom: float, right: float, top: float) -> None:
+    c.setFillColor(colors.black)
+    logo_y = top - 14 * mm
+    c.setFont("Helvetica-Bold", 26)
+    c.drawString(left + 6 * mm, logo_y, "MI")
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(left + 28 * mm, logo_y + 2 * mm, company.get("name") or "INITROF SRL")
+    c.setFont("Helvetica", 9)
+    c.drawString(left + 29 * mm, logo_y - 5 * mm, spaced_text(company.get("subtitle") or "Metalurgica"))
+
+    info_y = top - 26 * mm
+    info_lines = [
+        "TORNERIA MECANICA EN GENERAL",
+        f"DE {company.get('name') or 'METALURGICA INITROF S.R.L'}",
+        company.get("address") or "",
+        " - ".join(filter(None, [company.get("phone"), company.get("whatsapp")])),
+        " ".join(filter(None, [company.get("email"), company.get("website")])),
+    ]
+    c.setFont("Helvetica", 6.1)
+    for line in [row for row in info_lines if row]:
+        c.drawCentredString((left + right) / 2, info_y, str(line)[:78])
+        info_y -= 3.6 * mm
+    c.setFont("Helvetica-Bold", 8)
+    c.drawCentredString((left + right) / 2, bottom + 1.8 * mm, f"I.V.A.: {company.get('iva_condition') or 'Responsable Inscripto'}")
+
+
+def draw_delivery_document_header(c: canvas.Canvas, company: dict, doc: dict, left: float, bottom: float, right: float, top: float) -> None:
+    r_w = 14 * mm
+    c.rect(left, top - 25 * mm, r_w, 25 * mm, stroke=True, fill=False)
+    c.setFont("Helvetica-Bold", 18)
+    c.drawCentredString(left + r_w / 2, top - 10 * mm, "R")
+    c.setFont("Helvetica", 5.8)
+    c.drawCentredString(left + r_w / 2, top - 18 * mm, "Codigo")
+    c.drawCentredString(left + r_w / 2, top - 22 * mm, "91")
+
+    body_left = left + r_w
+    date_left = right - 38 * mm
+    c.line(body_left, top - 18 * mm, right, top - 18 * mm)
+    c.line(body_left, top - 28 * mm, right, top - 28 * mm)
+    c.line(body_left, top - 36 * mm, right, top - 36 * mm)
+    c.line(date_left, top - 28 * mm, date_left, bottom)
+    for idx in range(1, 3):
+        x = date_left + idx * (right - date_left) / 3
+        c.line(x, top - 36 * mm, x, bottom)
+
+    c.setFont("Helvetica", 5.8)
+    c.drawString(body_left + 3 * mm, top - 6 * mm, "Documento no valido como factura")
+    c.setFont("Helvetica", 10)
+    c.drawString(body_left + 8 * mm, top - 14 * mm, f"Nro {format_remito_number(doc.get('number') or '')}")
+    c.setFont("Helvetica-Bold", 7)
+    c.drawCentredString(body_left + (date_left - body_left) / 2, top - 24 * mm, "COMPROBANTE")
+    c.drawCentredString(date_left + (right - date_left) / 2, top - 24 * mm, "FECHA")
+    c.setFont("Helvetica-Bold", 14)
+    c.drawCentredString(body_left + (date_left - body_left) / 2, top - 32.5 * mm, "REMITO")
+
+    day, month, year = split_date(doc.get("date") or "")
+    c.setFont("Helvetica-Bold", 7)
+    date_values = [day, month, year]
+    for idx, value in enumerate(date_values):
+        cell_x = date_left + idx * (right - date_left) / 3
+        c.drawCentredString(cell_x + (right - date_left) / 6, top - 34 * mm, value)
+
+    fiscal_y = bottom + 8.8 * mm
+    c.setFont("Helvetica", 5.9)
+    c.drawString(body_left + 5 * mm, fiscal_y, f"C.U.I.T.: {company.get('cuit') or ''}")
+    c.drawString(body_left + 5 * mm, fiscal_y - 3.3 * mm, f"ING. BRUTOS: {company.get('gross_income') or ''}")
+    c.drawString(body_left + 5 * mm, fiscal_y - 6.6 * mm, f"INICIO ACT.: {company.get('activity_start') or ''}")
+
+
+def draw_delivery_client_block(c: canvas.Canvas, doc: dict, left: float, bottom: float, right: float, top: float) -> None:
+    row_mid = bottom + (top - bottom) / 2
+    c.line(left, row_mid, right, row_mid)
+    c.setFont("Helvetica-Bold", 8)
+    c.drawString(left + 3 * mm, top - 10 * mm, "Senor (es):")
+    c.drawString(left + 3 * mm, row_mid - 10 * mm, "Domicilio:")
+    c.setFont("Helvetica", 8)
+    c.drawString(left + 25 * mm, top - 10 * mm, str(doc.get("client_name") or "")[:90])
+    c.drawString(left + 25 * mm, row_mid - 10 * mm, str(doc.get("address") or "")[:94])
+
+
+def draw_delivery_sale_block(c: canvas.Canvas, company: dict, doc: dict, left: float, bottom: float, right: float, top: float) -> None:
+    iva_w = 20 * mm
+    cuit_x = left + 121 * mm
+    c.line(left + iva_w, bottom, left + iva_w, top)
+    c.line(cuit_x, bottom, cuit_x, top)
+    c.line(cuit_x, bottom + 8 * mm, right, bottom + 8 * mm)
+    c.line(left, bottom + 8 * mm, cuit_x, bottom + 8 * mm)
+
+    c.setFont("Helvetica-Bold", 12)
+    c.drawCentredString(left + iva_w / 2, bottom + 10.5 * mm, "I V A")
+    c.setFont("Helvetica", 7)
+    iva_value = infer_client_iva(doc)
+    c.drawString(left + iva_w + 4 * mm, bottom + 11 * mm, iva_value)
+    draw_checkbox(c, left + iva_w + 38 * mm, bottom + 9.5 * mm, checked=iva_value.lower().startswith("resp"))
+    c.drawString(cuit_x + 3 * mm, bottom + 11 * mm, "C.U.I.T.")
+    c.setFont("Helvetica", 8)
+    c.drawString(cuit_x + 21 * mm, bottom + 11 * mm, str(doc.get("client_cuit") or ""))
+
+    c.setFont("Helvetica-Bold", 5.8)
+    c.drawCentredString(left + iva_w / 2, bottom + 4.5 * mm, "Condiciones")
+    c.drawCentredString(left + iva_w / 2, bottom + 2.1 * mm, "de Venta")
+    c.setFont("Helvetica", 6.8)
+    sale_conditions = company.get("sale_conditions") or ""
+    c.drawString(left + iva_w + 4 * mm, bottom + 3 * mm, "Contado")
+    draw_checkbox(c, left + iva_w + 23 * mm, bottom + 2 * mm, checked="contado" in sale_conditions.lower())
+    c.drawString(left + iva_w + 34 * mm, bottom + 3 * mm, "Tarj. Cred.")
+    draw_checkbox(c, left + iva_w + 54 * mm, bottom + 2 * mm)
+    c.drawString(left + iva_w + 69 * mm, bottom + 3 * mm, "Cta. Cte.")
+    draw_checkbox(c, left + iva_w + 88 * mm, bottom + 2 * mm, checked="cta" in sale_conditions.lower())
+    c.drawString(cuit_x + 3 * mm, bottom + 3 * mm, "FacturaNro")
+
+
+def draw_delivery_items(
+    c: canvas.Canvas,
+    doc: dict,
+    items: list[dict],
+    left: float,
+    right: float,
+    top: float,
+    bottom: float,
+    detail_x: float,
+    amount_x: float,
+) -> None:
+    y = top - 7 * mm
+    detail_width = amount_x - detail_x - 5 * mm
+    continued = False
+    c.setFont("Helvetica", 8)
+    for item in items:
+        lines = wrap_text(c, item.get("description") or "", "Helvetica", 8, detail_width)
+        row_height = max(6 * mm, len(lines) * 4 * mm + 2 * mm)
+        if y - row_height < bottom + 12 * mm:
+            continued = True
+            c.setFont("Helvetica-Oblique", 7)
+            c.drawString(detail_x + 3 * mm, bottom + 6 * mm, "El detalle continua en una hoja adicional.")
+            break
+        c.setFont("Helvetica", 8)
+        c.drawRightString(left + 16 * mm, y, f"{float(item.get('quantity') or 0):g}")
+        for idx, line in enumerate(lines):
+            c.drawString(detail_x + 3 * mm, y - idx * 4 * mm, line)
+        c.drawRightString(right - 4 * mm, y, money(float(item.get("subtotal") or 0)))
+        y -= row_height
+
+    observations = str(doc.get("observations") or "").strip()
+    if observations and not continued:
+        c.setFont("Helvetica-Oblique", 7)
+        c.setFillColor(colors.black)
+        obs_lines = wrap_text(c, f"Obs.: {observations}", "Helvetica-Oblique", 7, detail_width)
+        obs_y = bottom + 8 * mm
+        for idx, line in enumerate(obs_lines[:2]):
+            c.drawString(detail_x + 3 * mm, obs_y - idx * 3.6 * mm, line)
+
+
+def draw_delivery_footer(c: canvas.Canvas, company: dict, doc: dict, left: float, right: float, bottom: float, top: float) -> None:
+    line_y = top - 19 * mm
+    c.line(left + 6 * mm, line_y, left + 62 * mm, line_y)
+    c.setFont("Helvetica", 7)
+    c.drawString(left + 24 * mm, line_y - 4 * mm, "Recibi Conforme")
+
+    barcode_value = barcode_payload(doc, company)
+    barcode = code128.Code128(barcode_value, barHeight=10 * mm, barWidth=0.24 * mm)
+    barcode.drawOn(c, right - 76 * mm, top - 17 * mm)
+    c.setFont("Helvetica", 4.8)
+    c.drawCentredString(right - 45 * mm, top - 20 * mm, barcode_value[:54])
+
+    c.setFont("Helvetica", 5.4)
+    printer_text = "de Horacio Daniel Lezcano - Junin 31 - Tafi Viejo - Tucuman - Tels. 0381 4614407 / 381 6786979"
+    c.drawString(left + 5 * mm, bottom + 13 * mm, printer_text[:130])
+    c.drawString(left + 5 * mm, bottom + 9 * mm, "C.U.I.T.: 20-16859501-9 - Fecha de inicio: 19-09-96")
+    c.drawString(left + 5 * mm, bottom + 5 * mm, "P.M. 3221 - Fecha de Imp 03-2026     0002-000000101 al 200")
+    c.drawCentredString((left + right) / 2, bottom + 9 * mm, "Original Blanco")
+    c.drawCentredString((left + right) / 2, bottom + 5 * mm, "Duplicado Color")
+    c.setFont("Helvetica-Bold", 9)
+    c.drawRightString(right - 4 * mm, bottom + 12 * mm, f"CAI.: {company.get('remito_cai') or ''}")
+    c.drawRightString(right - 4 * mm, bottom + 5 * mm, f"Fecha de Venc.: {company.get('remito_cai_due') or ''}")
+
+
+def draw_checkbox(c: canvas.Canvas, x: float, y: float, checked: bool = False) -> None:
+    size = 4 * mm
+    c.rect(x, y, size, size, stroke=True, fill=False)
+    if checked:
+        c.setLineWidth(1)
+        c.line(x + 0.8 * mm, y + 2 * mm, x + 1.8 * mm, y + 0.8 * mm)
+        c.line(x + 1.8 * mm, y + 0.8 * mm, x + 3.4 * mm, y + 3.2 * mm)
+        c.setLineWidth(0.8)
+
+
+def spaced_text(value: str) -> str:
+    text = str(value or "").title()
+    if len(text) <= 18:
+        return " ".join(text)
+    return text
+
+
+def format_remito_number(value: str) -> str:
+    digits = "".join(ch for ch in str(value or "") if ch.isdigit())
+    if digits:
+        return f"0002-{int(digits):09d}"
+    return str(value or "")
+
+
+def barcode_payload(doc: dict, company: dict) -> str:
+    digits = "".join(ch for ch in f"{company.get('cuit') or ''}{doc.get('number') or ''}{doc.get('date') or ''}" if ch.isdigit())
+    return (digits or "00000000000000000000")[:48]
 
 
 def draw_preprinted_delivery_note(c: canvas.Canvas, company: dict, doc: dict, items: list[dict]) -> None:

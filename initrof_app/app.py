@@ -374,7 +374,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(actions)
         self.print_table = self.table(["ID", "Tipo", "Numero", "Fecha", "Cliente", "Estado", "Total"])
         layout.addWidget(self.print_table, 1)
-        note = QLabel("Presupuestos y ordenes se imprimen completos en A4. Los remitos imprimen solo datos variables sobre el papel preimpreso.")
+        note = QLabel("Presupuestos, ordenes y remitos se imprimen completos en A4 sobre hoja blanca.")
         note.setObjectName("Hint")
         layout.addWidget(note)
         return page

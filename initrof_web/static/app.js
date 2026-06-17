@@ -77,10 +77,10 @@ function setView(name) {
     dashboard: ["Panel", "Gestion centralizada accesible desde cualquier computadora."],
     clients: ["Clientes", "Alta, modificacion y consulta de clientes."],
     budgets: ["Presupuestos", "Generacion de presupuestos, PDF y conversion a remito."],
-    delivery: ["Remitos", "Carga y reimpresion sobre remito preimpreso."],
+    delivery: ["Remitos", "Carga, PDF e impresion completa en hoja A4 blanca."],
     orders: ["Ordenes de trabajo", "Seguimiento de tareas, responsables y materiales."],
     printing: ["Impresion", "Vista previa, PDF y reimpresion historica."],
-    settings: ["Configuracion", "Datos fiscales, logo, offsets de remito y clave."],
+    settings: ["Configuracion", "Datos fiscales, logo, CAI de remito y clave."],
   };
   $("view-title").textContent = titles[name][0];
   $("view-hint").textContent = titles[name][1];
@@ -224,6 +224,50 @@ function clientOptions() {
   return [{ value: "", label: "Seleccione cliente" }, ...state.clients.map((c) => ({ value: c.id, label: c.business_name }))];
 }
 
+function clientById(id) {
+  return state.clients.find((client) => String(client.id) === String(id));
+}
+
+function rememberClient(client) {
+  if (!client || !client.id) return;
+  const index = state.clients.findIndex((row) => String(row.id) === String(client.id));
+  if (index >= 0) {
+    state.clients[index] = client;
+  } else {
+    state.clients.push(client);
+  }
+}
+
+async function fetchClientDetail(id) {
+  if (!id) return null;
+  try {
+    const client = await api(`/api/clients/${id}`);
+    rememberClient(client);
+    return client;
+  } catch (error) {
+    console.warn("No se pudo cargar la ficha completa del cliente.", error);
+    return clientById(id) || null;
+  }
+}
+
+async function fillDocumentClientFields(type) {
+  const key = type === "Presupuesto" ? "budget" : "delivery";
+  const form = $(`${key}-form`);
+  const selectedClientId = form.elements.client_id.value;
+  if (!selectedClientId) {
+    form.elements.contact.value = "";
+    form.elements.address.value = "";
+    form.elements.phone.value = "";
+    return;
+  }
+  const client = await fetchClientDetail(selectedClientId);
+  if (!client) return;
+  if (!form.isConnected || String(form.elements.client_id.value) !== String(selectedClientId)) return;
+  form.elements.contact.value = client.contact_name || client.business_name || "";
+  form.elements.address.value = client.address || "";
+  form.elements.phone.value = client.phone || client.whatsapp || "";
+}
+
 function renderDocuments(type) {
   const key = type === "Presupuesto" ? "budget" : "delivery";
   const rows = type === "Presupuesto" ? state.budgets : state.delivery;
@@ -268,6 +312,7 @@ function renderDocumentForm(type, doc = {}, items = null) {
     `<button>Guardar ${type.toLowerCase()}</button> <button type="button" class="secondary" id="${key}-clear">Limpiar</button> ${voidButton}`,
   ].join("");
   $(`${key}-form`).onsubmit = (event) => saveDocument(event, type);
+  $(`${key}-form`).elements.client_id.onchange = () => guard(async () => fillDocumentClientFields(type));
   $(`${key}-add-item`).onclick = () => { $(`${key}-items`).querySelector("tbody").insertAdjacentHTML("beforeend", itemRow({ quantity: 1, unit: "u", unit_price: 0 })); bindItemTotals(key); };
   $(`${key}-remove-item`).onclick = () => { const tbody = $(`${key}-items`).querySelector("tbody"); if (tbody.children.length > 1) tbody.lastElementChild.remove(); updateTotals(key); };
   $(`${key}-clear`).onclick = () => newDocument(type);
@@ -532,4 +577,3 @@ function bindEvents() {
 
 bindEvents();
 loadAll().catch((error) => toast(error.message, "error"));
-

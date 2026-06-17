@@ -42,9 +42,10 @@ def change_password(user_id: int, password: str) -> None:
         conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (hash_password(password), user_id))
 
 
-def get_client(client_id: int) -> dict:
+def get_client(client_id: int) -> dict | None:
     with session() as conn:
-        return dict(conn.execute("SELECT * FROM clients WHERE id = ?", (client_id,)).fetchone())
+        row = conn.execute("SELECT * FROM clients WHERE id = ?", (client_id,)).fetchone()
+        return dict(row) if row else None
 
 
 def delete_document(document_id: int) -> None:
@@ -72,7 +73,7 @@ def dashboard_payload() -> dict:
     stats = repo.dashboard_stats()
     return {
         "stats": stats,
-        "clients": repo.list_clients()[:8],
+        "clients": repo.list_clients(),
         "budgets": repo.list_documents("Presupuesto")[:8],
         "delivery_notes": repo.list_documents("Remito")[:8],
         "orders": repo.list_work_orders()[:8],

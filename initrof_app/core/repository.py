@@ -93,6 +93,7 @@ def save_document(doc: dict, items: list[dict]) -> int:
     doc["subtotal"], doc["iva"], doc["total"] = subtotal, iva, total
     fields = ["doc_type", "number", "date", "client_id", "contact", "address", "phone", "status", "subtotal", "iva", "total", "observations", "source_document_id"]
     with session() as conn:
+        apply_client_document_defaults(conn, doc)
         if doc.get("id"):
             existing = conn.execute("SELECT number FROM documents WHERE id = ?", (doc["id"],)).fetchone()
             if existing:
@@ -117,6 +118,18 @@ def save_document(doc: dict, items: list[dict]) -> int:
         )
         conn.execute("INSERT INTO history(entity_type, entity_id, action, detail) VALUES (?, ?, 'Guardar', ?)", (doc["doc_type"], doc_id, doc["number"]))
         return doc_id
+
+
+def apply_client_document_defaults(conn, doc: dict) -> None:
+    client_id = doc.get("client_id")
+    if not client_id:
+        return
+    client = conn.execute("SELECT business_name, contact_name, address, phone, whatsapp FROM clients WHERE id = ?", (client_id,)).fetchone()
+    if not client:
+        return
+    doc["contact"] = (doc.get("contact") or client["contact_name"] or client["business_name"] or "").strip()
+    doc["address"] = (doc.get("address") or client["address"] or "").strip()
+    doc["phone"] = (doc.get("phone") or client["phone"] or client["whatsapp"] or "").strip()
 
 
 def list_documents(doc_type: str | None = None, search: str = ""):
@@ -253,4 +266,3 @@ def dashboard_stats():
                 """
             ).fetchall()],
         }
-

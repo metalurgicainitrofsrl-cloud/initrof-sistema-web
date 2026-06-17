@@ -1,4 +1,5 @@
 FROM public.ecr.aws/docker/library/python:3.12-slim
+
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV INITROF_DATA_DIR=/app/data
