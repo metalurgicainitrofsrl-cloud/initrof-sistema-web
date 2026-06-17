@@ -6,6 +6,7 @@ const state = {
   printables: [],
   company: {},
   selected: { client: null, budget: null, delivery: null, order: null, print: null },
+  orderDetail: null,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -479,7 +480,13 @@ function renderOrders() {
   table($("orders-table"), ["ID", "Numero", "Cliente", "Responsable", "Inicio", "Estado"], state.orders.map((o) => ({
     id: o.id, ID: o.id, Numero: o.number, Cliente: o.client_name, Responsable: o.responsible || "", Inicio: o.start_date, Estado: o.status,
   })), state.selected.order, selectOrder);
-  renderOrderForm();
+  renderOrderForm(selectedOrderForForm());
+}
+
+function selectedOrderForForm() {
+  if (!state.selected.order) return {};
+  if (state.orderDetail && String(state.orderDetail.id) === String(state.selected.order)) return state.orderDetail;
+  return state.orders.find((order) => String(order.id) === String(state.selected.order)) || {};
 }
 
 async function selectOrder(id) {
@@ -487,13 +494,14 @@ async function selectOrder(id) {
   await guard(async () => {
     state.orderDetail = await api(`/api/orders/${id}`);
     renderOrders();
-    renderOrderForm(state.orderDetail);
   });
 }
 
 function renderOrderForm(order = {}) {
+  const editing = Boolean(order.id);
   $("order-form").innerHTML = [
-    input("number", "Numero", order.number || "Se asigna al guardar"),
+    `<div class="full form-note">${editing ? `Editando ${escapeHtml(order.number)}. Modifique los campos necesarios y presione Guardar orden.` : "Nueva orden lista para cargar."}</div>`,
+    input("number", "Numero", order.number || "Se asigna al guardar", "text", "", "readonly"),
     order.source_budget_number ? input("source_budget_number", "Presupuesto origen", order.source_budget_number, "text", "", "readonly") : "",
     select("client_id", "Cliente", clientOptions(), order.client_id),
     input("responsible", "Responsable", order.responsible),
@@ -506,22 +514,24 @@ function renderOrderForm(order = {}) {
     `<div class="full"><button>Guardar orden</button> <button type="button" class="secondary" id="clear-order">Limpiar</button></div>`,
   ].join("");
   $("order-form").onsubmit = saveOrder;
-  $("clear-order").onclick = () => { state.selected.order = null; renderOrderForm(); renderOrders(); };
+  $("clear-order").onclick = () => { state.selected.order = null; state.orderDetail = null; renderOrders(); };
 }
 
 async function saveOrder(event) {
   event.preventDefault();
   const data = formData(event.target);
+  const wasEditing = Boolean(state.selected.order);
   data.id = state.selected.order;
   data.client_id = Number(data.client_id);
   if (!data.client_id) return toast("Seleccione cliente.", "error");
   if (!data.start_date) return toast("La fecha de inicio es obligatoria.", "error");
+  if (!data.requested_work.trim()) return toast("Complete el trabajo solicitado.", "error");
   await guard(async () => {
     const saved = await api("/api/orders", { method: "POST", body: JSON.stringify(data) });
     state.selected.order = saved.id;
     state.orderDetail = saved;
     await refreshLists();
-    toast("Orden guardada.", "success");
+    toast(wasEditing ? "Orden actualizada correctamente." : "Orden guardada.", "success");
   });
 }
 
@@ -594,6 +604,10 @@ function bindEvents() {
   on("new-budget", "click", () => newDocument("Presupuesto"));
   on("new-delivery", "click", () => newDocument("Remito"));
   on("new-order", "click", () => { state.selected.order = null; state.orderDetail = null; renderOrderForm(); renderOrders(); toast("Nueva orden lista para cargar.", "success"); });
+  on("edit-order", "click", () => {
+    if (!state.selected.order) return toast("Seleccione una orden de la lista para editar.", "error");
+    selectOrder(state.selected.order);
+  });
   on("budget-pdf", "click", () => openSelectedPdf("Presupuesto"));
   on("delivery-pdf", "click", () => openSelectedPdf("Remito"));
   on("order-pdf", "click", () => openSelectedPdf("Orden"));

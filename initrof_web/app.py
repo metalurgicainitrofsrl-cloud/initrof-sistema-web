@@ -228,7 +228,10 @@ async def save_order(request: Request, user: dict = Depends(require_user)):
         raise HTTPException(400, "Seleccione cliente")
     if not str(payload.get("start_date") or "").strip():
         raise HTTPException(400, "La fecha de inicio es obligatoria")
-    order_id = repo.save_work_order(payload)
+    try:
+        order_id = repo.save_work_order(payload)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
     return repo.get_work_order(order_id)
 
 

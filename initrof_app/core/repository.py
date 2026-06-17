@@ -197,9 +197,12 @@ def save_work_order(data: dict) -> int:
     fields = ["number", "client_id", "source_document_id", "responsible", "start_date", "due_date", "status", "requested_work", "materials", "observations"]
     with session() as conn:
         if data.get("id"):
+            existing = conn.execute("SELECT number, source_document_id FROM work_orders WHERE id = ?", (data["id"],)).fetchone()
+            if not existing:
+                raise ValueError("La orden de trabajo no existe")
+            data["number"] = existing["number"]
             if "source_document_id" not in data:
-                existing = conn.execute("SELECT source_document_id FROM work_orders WHERE id = ?", (data["id"],)).fetchone()
-                data["source_document_id"] = existing["source_document_id"] if existing else None
+                data["source_document_id"] = existing["source_document_id"]
             conn.execute(
                 f"UPDATE work_orders SET {', '.join(f'{f} = ?' for f in fields)}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                 [data.get(f) for f in fields] + [data["id"]],
