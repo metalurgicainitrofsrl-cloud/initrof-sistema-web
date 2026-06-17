@@ -91,7 +91,7 @@ def save_document(doc: dict, items: list[dict]) -> int:
     iva = round(subtotal * 0.21, 2)
     total = round(subtotal + iva, 2)
     doc["subtotal"], doc["iva"], doc["total"] = subtotal, iva, total
-    fields = ["doc_type", "number", "date", "client_id", "contact", "address", "phone", "status", "subtotal", "iva", "total", "observations", "source_document_id"]
+    fields = ["doc_type", "number", "date", "client_id", "contact", "address", "phone", "status", "subtotal", "iva", "total", "observations", "invoice_number", "source_document_id"]
     with session() as conn:
         apply_client_document_defaults(conn, doc)
         if doc.get("id"):
@@ -194,9 +194,12 @@ def get_document(document_id: int):
 
 
 def save_work_order(data: dict) -> int:
-    fields = ["number", "client_id", "responsible", "start_date", "due_date", "status", "requested_work", "materials", "observations"]
+    fields = ["number", "client_id", "source_document_id", "responsible", "start_date", "due_date", "status", "requested_work", "materials", "observations"]
     with session() as conn:
         if data.get("id"):
+            if "source_document_id" not in data:
+                existing = conn.execute("SELECT source_document_id FROM work_orders WHERE id = ?", (data["id"],)).fetchone()
+                data["source_document_id"] = existing["source_document_id"] if existing else None
             conn.execute(
                 f"UPDATE work_orders SET {', '.join(f'{f} = ?' for f in fields)}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                 [data.get(f) for f in fields] + [data["id"]],
@@ -214,16 +217,35 @@ def save_work_order(data: dict) -> int:
         return order_id
 
 
+def get_work_order_by_source_document(document_id: int) -> dict | None:
+    with session() as conn:
+        row = conn.execute(
+            """
+            SELECT w.*, c.business_name AS client_name, d.number AS source_budget_number
+            FROM work_orders w
+            JOIN clients c ON c.id = w.client_id
+            LEFT JOIN documents d ON d.id = w.source_document_id
+            WHERE w.source_document_id = ?
+            ORDER BY w.id DESC
+            LIMIT 1
+            """,
+            (document_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
+
 def list_work_orders(search: str = ""):
     with session() as conn:
         rows = conn.execute(
             """
-            SELECT w.*, c.business_name AS client_name
-            FROM work_orders w JOIN clients c ON c.id = w.client_id
-            WHERE w.number LIKE ? OR c.business_name LIKE ? OR w.status LIKE ?
+            SELECT w.*, c.business_name AS client_name, d.number AS source_budget_number
+            FROM work_orders w
+            JOIN clients c ON c.id = w.client_id
+            LEFT JOIN documents d ON d.id = w.source_document_id
+            WHERE w.number LIKE ? OR c.business_name LIKE ? OR w.status LIKE ? OR d.number LIKE ?
             ORDER BY w.start_date DESC, w.id DESC
             """,
-            (f"%{search}%", f"%{search}%", f"%{search}%"),
+            (f"%{search}%", f"%{search}%", f"%{search}%", f"%{search}%"),
         ).fetchall()
         return [dict(row) for row in rows]
 
@@ -233,8 +255,11 @@ def get_work_order(order_id: int):
         row = conn.execute(
             """
             SELECT w.*, c.business_name AS client_name, c.email AS client_email,
-                   c.address AS client_address, c.phone AS client_phone
-            FROM work_orders w JOIN clients c ON c.id = w.client_id
+                   c.address AS client_address, c.phone AS client_phone,
+                   d.number AS source_budget_number
+            FROM work_orders w
+            JOIN clients c ON c.id = w.client_id
+            LEFT JOIN documents d ON d.id = w.source_document_id
             WHERE w.id = ?
             """,
             (order_id,),

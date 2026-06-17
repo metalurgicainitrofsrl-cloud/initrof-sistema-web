@@ -64,6 +64,16 @@ td { border-bottom: 1px solid #edf1f5; padding: 9px 10px; vertical-align: top; }
 td.empty { color: var(--muted); text-align: center; padding: 18px; }
 tr.selected td { background: #ddecfb; }
 tr:hover td { background: #f6f9fc; }
+.status-row.status-aprobado td, .status-row.status-entregado td, .status-row.status-facturado td, .status-row.status-finalizado td { background: #f0fdf4; }
+.status-row.status-rechazado td, .status-row.status-anulado td { background: #fff1f2; }
+.status-row.status-enviado td, .status-row.status-pendiente td { background: #fffbeb; }
+.status-row.status-en-proceso td, .status-row.status-borrador td { background: #eff6ff; }
+tr.selected.status-row td { background: #ddecfb; }
+.status-badge { display: inline-flex; align-items: center; min-height: 24px; border-radius: 999px; padding: 3px 9px; font-size: 12px; font-weight: 800; background: #e2e8f0; color: #334155; white-space: nowrap; }
+.status-badge.status-aprobado, .status-badge.status-entregado, .status-badge.status-facturado, .status-badge.status-finalizado { background: #bbf7d0; color: #166534; }
+.status-badge.status-rechazado, .status-badge.status-anulado { background: #fecdd3; color: #991b1b; }
+.status-badge.status-enviado, .status-badge.status-pendiente { background: #fde68a; color: #92400e; }
+.status-badge.status-en-proceso, .status-badge.status-borrador { background: #bfdbfe; color: #1e40af; }
 .items { margin: 12px 0; }
 .items input { min-width: 80px; padding: 8px; }
 .items td:nth-child(2) input { min-width: 260px; }

@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS documents (
     iva REAL NOT NULL DEFAULT 0,
     total REAL NOT NULL DEFAULT 0,
     observations TEXT,
+    invoice_number TEXT,
     source_document_id INTEGER REFERENCES documents(id),
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -93,6 +94,7 @@ CREATE TABLE IF NOT EXISTS work_orders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     number TEXT NOT NULL UNIQUE,
     client_id INTEGER NOT NULL REFERENCES clients(id),
+    source_document_id INTEGER REFERENCES documents(id),
     responsible TEXT,
     start_date TEXT NOT NULL,
     due_date TEXT,
@@ -181,9 +183,16 @@ def migrate(conn: sqlite3.Connection) -> None:
         "INSERT OR IGNORE INTO number_sequences(key, prefix, last_number) VALUES (?, ?, 0)",
         [("Presupuesto", "P"), ("Remito", "R"), ("Orden", "OT")],
     )
+    document_columns = {row["name"] for row in conn.execute("PRAGMA table_info(documents)").fetchall()}
+    if "invoice_number" not in document_columns:
+        conn.execute("ALTER TABLE documents ADD COLUMN invoice_number TEXT")
     sync_sequence(conn, "Presupuesto", "documents", "doc_type = 'Presupuesto'")
     sync_sequence(conn, "Remito", "documents", "doc_type = 'Remito'")
     sync_sequence(conn, "Orden", "work_orders", "1 = 1")
+    conn.execute("UPDATE number_sequences SET last_number = MAX(last_number, 183) WHERE key = 'Remito'")
+    work_order_columns = {row["name"] for row in conn.execute("PRAGMA table_info(work_orders)").fetchall()}
+    if "source_document_id" not in work_order_columns:
+        conn.execute("ALTER TABLE work_orders ADD COLUMN source_document_id INTEGER REFERENCES documents(id)")
 
 
 def sync_sequence(conn: sqlite3.Connection, key: str, table: str, where: str) -> None:

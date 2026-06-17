@@ -177,11 +177,38 @@ def convert_to_remito(document_id: int, user: dict = Depends(require_user)):
         "phone": doc.get("phone"),
         "status": "Pendiente",
         "observations": f"Generado desde presupuesto {doc['number']}",
+        "invoice_number": "",
         "source_document_id": document_id,
     }
     remito_id = repo.save_document(new_doc, items)
     remito, remito_items = repo.get_document(remito_id)
     return {"document": remito, "items": remito_items}
+
+
+@app.post("/api/documents/{document_id}/convert-to-order")
+def convert_to_order(document_id: int, user: dict = Depends(require_user)):
+    doc, items = repo.get_document(document_id)
+    if doc["doc_type"] != "Presupuesto":
+        raise HTTPException(400, "Solo se puede generar una orden desde un presupuesto")
+    if doc.get("status") in {"Rechazado", "Anulado"}:
+        raise HTTPException(400, "No se puede generar una orden desde un presupuesto rechazado o anulado")
+    existing_order = repo.get_work_order_by_source_document(document_id)
+    if existing_order:
+        return {"order": existing_order, "created": False}
+    order_id = repo.save_work_order(
+        {
+            "client_id": doc["client_id"],
+            "source_document_id": document_id,
+            "responsible": "",
+            "start_date": date.today().isoformat(),
+            "due_date": date.today().isoformat(),
+            "status": "Pendiente",
+            "requested_work": build_work_order_requested_work(doc, items),
+            "materials": "",
+            "observations": f"Generada desde presupuesto {doc['number']}. {doc.get('observations') or ''}".strip(),
+        }
+    )
+    return {"order": repo.get_work_order(order_id), "created": True}
 
 
 @app.get("/api/orders")
@@ -284,3 +311,17 @@ def validate_document_payload(payload: dict) -> None:
     if not clean_items:
         raise HTTPException(400, "Agregue al menos un item con descripcion")
     payload["items"] = clean_items
+
+
+def build_work_order_requested_work(doc: dict, items: list[dict]) -> str:
+    lines = [
+        f"Orden generada desde presupuesto {doc['number']}",
+        "",
+        "Trabajos a realizar:",
+    ]
+    for item in items:
+        quantity = f"{float(item.get('quantity') or 0):g}"
+        unit = item.get("unit") or "u"
+        description = item.get("description") or ""
+        lines.append(f"- {quantity} {unit} - {description}")
+    return "\n".join(lines)

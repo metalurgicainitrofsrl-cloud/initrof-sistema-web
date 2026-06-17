@@ -96,11 +96,28 @@ function table(el, headers, rows, selectedId, onClick) {
   rows.forEach((row) => {
     const tr = document.createElement("tr");
     tr.dataset.id = row.id;
+    if (row.Estado) tr.classList.add("status-row", `status-${statusSlug(row.Estado)}`);
     if (String(row.id) === String(selectedId)) tr.classList.add("selected");
-    tr.innerHTML = headers.map((h) => `<td>${escapeHtml(row[h] ?? "")}</td>`).join("");
+    tr.innerHTML = headers.map((h) => `<td>${cellHtml(h, row[h])}</td>`).join("");
     tr.addEventListener("click", () => onClick(row.id));
     tbody.appendChild(tr);
   });
+}
+
+function statusSlug(status) {
+  return String(status || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, "-");
+}
+
+function cellHtml(header, value) {
+  if (header === "Estado") {
+    const label = escapeHtml(value ?? "");
+    return `<span class="status-badge status-${statusSlug(value)}">${label}</span>`;
+  }
+  return escapeHtml(value ?? "");
 }
 
 function input(name, label, value = "", type = "text", cls = "", attrs = "") {
@@ -303,6 +320,7 @@ function renderDocumentForm(type, doc = {}, items = null) {
     select("status", "Estado", statuses.map((s) => ({ value: s, label: s })), doc.status || statuses[0]),
     input("contact", "Contacto", doc.contact),
     input("phone", "Telefono", doc.phone),
+    type === "Remito" ? input("invoice_number", "Factura nro", doc.invoice_number) : "",
     input("address", "Direccion", doc.address, "text", "full"),
     `</div>`,
     `<label>Items</label><div class="item-actions"><button type="button" id="${key}-add-item">Agregar item</button><button type="button" class="secondary" id="${key}-remove-item">Quitar ultimo</button></div>`,
@@ -389,6 +407,7 @@ async function saveDocument(event, type) {
         phone: data.phone,
         status: data.status,
         observations: data.observations,
+        invoice_number: data.invoice_number || "",
         source_document_id: null,
       },
       items,
@@ -443,6 +462,19 @@ async function convertSelectedBudget() {
   });
 }
 
+async function generateOrderFromSelectedBudget() {
+  if (!state.selected.budget) return toast("Seleccione un presupuesto.", "error");
+  await guard(async () => {
+    const payload = await api(`/api/documents/${state.selected.budget}/convert-to-order`, { method: "POST" });
+    await refreshLists();
+    state.selected.order = payload.order.id;
+    state.orderDetail = payload.order;
+    setView("orders");
+    renderOrders();
+    toast(payload.created ? "Orden de trabajo generada desde el presupuesto." : "Este presupuesto ya tenia una orden generada.", "success");
+  });
+}
+
 function renderOrders() {
   table($("orders-table"), ["ID", "Numero", "Cliente", "Responsable", "Inicio", "Estado"], state.orders.map((o) => ({
     id: o.id, ID: o.id, Numero: o.number, Cliente: o.client_name, Responsable: o.responsible || "", Inicio: o.start_date, Estado: o.status,
@@ -462,6 +494,7 @@ async function selectOrder(id) {
 function renderOrderForm(order = {}) {
   $("order-form").innerHTML = [
     input("number", "Numero", order.number || "Se asigna al guardar"),
+    order.source_budget_number ? input("source_budget_number", "Presupuesto origen", order.source_budget_number, "text", "", "readonly") : "",
     select("client_id", "Cliente", clientOptions(), order.client_id),
     input("responsible", "Responsable", order.responsible),
     input("start_date", "Fecha inicio", order.start_date || window.INITROF_TODAY, "date"),
@@ -565,6 +598,7 @@ function bindEvents() {
   on("delivery-pdf", "click", () => openSelectedPdf("Remito"));
   on("order-pdf", "click", () => openSelectedPdf("Orden"));
   on("budget-convert", "click", convertSelectedBudget);
+  on("budget-order", "click", generateOrderFromSelectedBudget);
   on("print-open", "click", openPrintable);
   $("logo-form").onsubmit = uploadLogo;
   on("save-password", "click", savePassword);

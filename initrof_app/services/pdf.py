@@ -226,14 +226,14 @@ def draw_delivery_company_header(c: canvas.Canvas, company: dict, left: float, b
     c.setFont("Helvetica-Bold", 26)
     c.drawString(left + 6 * mm, logo_y, "MI")
     c.setFont("Helvetica-Bold", 16)
-    c.drawString(left + 28 * mm, logo_y + 2 * mm, company.get("name") or "INITROF SRL")
+    c.drawString(left + 28 * mm, logo_y + 2 * mm, delivery_company_name(company))
     c.setFont("Helvetica", 9)
     c.drawString(left + 29 * mm, logo_y - 5 * mm, spaced_text(company.get("subtitle") or "Metalurgica"))
 
     info_y = top - 26 * mm
     info_lines = [
         "TORNERIA MECANICA EN GENERAL",
-        f"DE {company.get('name') or 'METALURGICA INITROF S.R.L'}",
+        f"DE {delivery_company_name(company)}",
         company.get("address") or "",
         " - ".join(filter(None, [company.get("phone"), company.get("whatsapp")])),
         " ".join(filter(None, [company.get("email"), company.get("website")])),
@@ -259,11 +259,12 @@ def draw_delivery_document_header(c: canvas.Canvas, company: dict, doc: dict, le
     date_left = right - 38 * mm
     c.line(body_left, top - 18 * mm, right, top - 18 * mm)
     c.line(body_left, top - 28 * mm, right, top - 28 * mm)
-    c.line(body_left, top - 36 * mm, right, top - 36 * mm)
+    date_bottom_y = top - 36 * mm
+    c.line(body_left, date_bottom_y, right, date_bottom_y)
     c.line(date_left, top - 28 * mm, date_left, bottom)
     for idx in range(1, 3):
         x = date_left + idx * (right - date_left) / 3
-        c.line(x, top - 36 * mm, x, bottom)
+        c.line(x, top - 28 * mm, x, date_bottom_y)
 
     c.setFont("Helvetica", 5.8)
     c.drawString(body_left + 3 * mm, top - 6 * mm, "Documento no valido como factura")
@@ -280,13 +281,13 @@ def draw_delivery_document_header(c: canvas.Canvas, company: dict, doc: dict, le
     date_values = [day, month, year]
     for idx, value in enumerate(date_values):
         cell_x = date_left + idx * (right - date_left) / 3
-        c.drawCentredString(cell_x + (right - date_left) / 6, top - 34 * mm, value)
+        c.drawCentredString(cell_x + (right - date_left) / 6, top - 32.6 * mm, value)
 
-    fiscal_y = bottom + 8.8 * mm
-    c.setFont("Helvetica", 5.9)
+    fiscal_y = bottom + 7.6 * mm
+    c.setFont("Helvetica", 5.6)
     c.drawString(body_left + 5 * mm, fiscal_y, f"C.U.I.T.: {company.get('cuit') or ''}")
-    c.drawString(body_left + 5 * mm, fiscal_y - 3.3 * mm, f"ING. BRUTOS: {company.get('gross_income') or ''}")
-    c.drawString(body_left + 5 * mm, fiscal_y - 6.6 * mm, f"INICIO ACT.: {company.get('activity_start') or ''}")
+    c.drawString(body_left + 5 * mm, fiscal_y - 3.1 * mm, f"ING. BRUTOS: {company.get('gross_income') or ''}")
+    c.drawString(body_left + 5 * mm, fiscal_y - 6.2 * mm, f"INICIO ACT.: {company.get('activity_start') or ''}")
 
 
 def draw_delivery_client_block(c: canvas.Canvas, doc: dict, left: float, bottom: float, right: float, top: float) -> None:
@@ -330,6 +331,8 @@ def draw_delivery_sale_block(c: canvas.Canvas, company: dict, doc: dict, left: f
     c.drawString(left + iva_w + 69 * mm, bottom + 3 * mm, "Cta. Cte.")
     draw_checkbox(c, left + iva_w + 88 * mm, bottom + 2 * mm, checked="cta" in sale_conditions.lower())
     c.drawString(cuit_x + 3 * mm, bottom + 3 * mm, "FacturaNro")
+    c.setFont("Helvetica", 8)
+    c.drawString(cuit_x + 24 * mm, bottom + 3 * mm, str(doc.get("invoice_number") or ""))
 
 
 def draw_delivery_items(
@@ -384,13 +387,6 @@ def draw_delivery_footer(c: canvas.Canvas, company: dict, doc: dict, left: float
     c.setFont("Helvetica", 4.8)
     c.drawCentredString(right - 45 * mm, top - 20 * mm, barcode_value[:54])
 
-    c.setFont("Helvetica", 5.4)
-    printer_text = "de Horacio Daniel Lezcano - Junin 31 - Tafi Viejo - Tucuman - Tels. 0381 4614407 / 381 6786979"
-    c.drawString(left + 5 * mm, bottom + 13 * mm, printer_text[:130])
-    c.drawString(left + 5 * mm, bottom + 9 * mm, "C.U.I.T.: 20-16859501-9 - Fecha de inicio: 19-09-96")
-    c.drawString(left + 5 * mm, bottom + 5 * mm, "P.M. 3221 - Fecha de Imp 03-2026     0002-000000101 al 200")
-    c.drawCentredString((left + right) / 2, bottom + 9 * mm, "Original Blanco")
-    c.drawCentredString((left + right) / 2, bottom + 5 * mm, "Duplicado Color")
     c.setFont("Helvetica-Bold", 9)
     c.drawRightString(right - 4 * mm, bottom + 12 * mm, f"CAI.: {company.get('remito_cai') or ''}")
     c.drawRightString(right - 4 * mm, bottom + 5 * mm, f"Fecha de Venc.: {company.get('remito_cai_due') or ''}")
@@ -413,10 +409,18 @@ def spaced_text(value: str) -> str:
     return text
 
 
+def delivery_company_name(company: dict) -> str:
+    name = str(company.get("name") or "INITROF SRL").upper()
+    for token in ["METALURGICA", "METALÚRGICA"]:
+        name = name.replace(token, "")
+    name = name.replace("S.R.L.", "SRL").replace("S.R.L", "SRL")
+    return " ".join(name.split()) or "INITROF SRL"
+
+
 def format_remito_number(value: str) -> str:
     digits = "".join(ch for ch in str(value or "") if ch.isdigit())
     if digits:
-        return f"0002-{int(digits):09d}"
+        return f"0002-{int(digits):08d}"
     return str(value or "")
 
 
