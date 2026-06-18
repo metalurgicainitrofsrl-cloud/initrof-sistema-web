@@ -133,17 +133,23 @@ def draw_document(c: canvas.Canvas, company: dict, doc: dict, items: list[dict],
         y -= item_height + 2 * mm
 
     y -= 4 * mm
+    show_iva = int(doc.get("show_iva", 1) or 0) == 1
     totals_x = width - margin - 64 * mm
     c.setFillColor(LIGHT)
-    c.roundRect(totals_x, y - 29 * mm, 64 * mm, 29 * mm, 2.5 * mm, fill=True, stroke=False)
-    total_line(c, totals_x + 5 * mm, y - 7 * mm, "Subtotal", money(doc["subtotal"]), False)
-    total_line(c, totals_x + 5 * mm, y - 15 * mm, "IVA 21%", money(doc["iva"]), False)
+    totals_height = 29 * mm if show_iva else 16 * mm
+    c.roundRect(totals_x, y - totals_height, 64 * mm, totals_height, 2.5 * mm, fill=True, stroke=False)
+    total_box_y = y - 27 * mm
+    if show_iva:
+        total_line(c, totals_x + 5 * mm, y - 7 * mm, "Subtotal", money(doc["subtotal"]), False)
+        total_line(c, totals_x + 5 * mm, y - 15 * mm, "IVA 21%", money(doc["iva"]), False)
+    else:
+        total_box_y = y - 14 * mm
     c.setFillColor(RED)
-    c.roundRect(totals_x + 3 * mm, y - 27 * mm, 58 * mm, 9 * mm, 2 * mm, fill=True, stroke=False)
+    c.roundRect(totals_x + 3 * mm, total_box_y, 58 * mm, 9 * mm, 2 * mm, fill=True, stroke=False)
     c.setFillColor(colors.white)
     c.setFont("Helvetica-Bold", 10)
-    c.drawString(totals_x + 6 * mm, y - 24 * mm, "TOTAL GENERAL")
-    c.drawRightString(totals_x + 59 * mm, y - 24 * mm, money(doc["total"]))
+    c.drawString(totals_x + 6 * mm, total_box_y + 3 * mm, "TOTAL GENERAL")
+    c.drawRightString(totals_x + 59 * mm, total_box_y + 3 * mm, money(doc["total"]))
 
     obs_y = y - 38 * mm
     section_title(c, margin, obs_y, "Observaciones")

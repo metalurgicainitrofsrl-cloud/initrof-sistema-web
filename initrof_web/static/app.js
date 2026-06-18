@@ -133,8 +133,16 @@ function select(name, label, options, value = "", cls = "") {
   return `<div class="${cls}"><label>${escapeHtml(label)}</label><select name="${escapeHtml(name)}">${options.map((opt) => `<option value="${escapeHtml(opt.value)}" ${String(opt.value) === String(value) ? "selected" : ""}>${escapeHtml(opt.label)}</option>`).join("")}</select></div>`;
 }
 
+function checkbox(name, label, checked = false, cls = "full") {
+  return `<div class="${cls} checkbox-row"><label><input name="${escapeHtml(name)}" type="checkbox" value="1" ${checked ? "checked" : ""}> ${escapeHtml(label)}</label></div>`;
+}
+
 function formData(form) {
   return Object.fromEntries(new FormData(form).entries());
+}
+
+function documentShowsIva(doc = {}) {
+  return doc.show_iva === undefined || doc.show_iva === null || String(doc.show_iva) !== "0";
 }
 
 async function loadAll() {
@@ -319,6 +327,7 @@ function renderDocumentForm(type, doc = {}, items = null) {
     input("date", "Fecha", doc.date || window.INITROF_TODAY, "date"),
     select("client_id", "Cliente", clientOptions(), doc.client_id),
     select("status", "Estado", statuses.map((s) => ({ value: s, label: s })), doc.status || statuses[0]),
+    type === "Presupuesto" ? checkbox("show_iva", "Mostrar IVA 21% discriminado", documentShowsIva(doc)) : "",
     input("contact", "Contacto", doc.contact),
     input("phone", "Telefono", doc.phone),
     type === "Remito" ? input("invoice_number", "Factura nro", doc.invoice_number) : "",
@@ -359,6 +368,8 @@ function itemRow(item = {}) {
 
 function bindItemTotals(key) {
   $(`${key}-items`).querySelectorAll("input").forEach((inputEl) => { inputEl.oninput = () => updateTotals(key); });
+  const ivaToggle = $(`${key}-form`).elements.show_iva;
+  if (ivaToggle) ivaToggle.onchange = () => updateTotals(key);
   updateTotals(key);
 }
 
@@ -375,14 +386,16 @@ function collectItems(key) {
 }
 
 function updateTotals(key) {
-  let total = 0;
+  let subtotalTotal = 0;
   $(`${key}-items`).querySelectorAll("tbody tr").forEach((tr) => {
     const fields = tr.querySelectorAll("input");
     const subtotal = Number(fields[0].value || 0) * Number(fields[3].value || 0);
     tr.querySelector(".line-total").textContent = money(subtotal);
-    total += subtotal * 1.21;
+    subtotalTotal += subtotal;
   });
-  $(`${key}-total`).textContent = `Total estimado con IVA: ${money(total)}`;
+  const showIva = key !== "budget" || Boolean($(`${key}-form`).elements.show_iva?.checked);
+  const total = showIva ? subtotalTotal * 1.21 : subtotalTotal;
+  $(`${key}-total`).textContent = showIva ? `Total estimado con IVA: ${money(total)}` : `Total estimado: ${money(total)}`;
 }
 
 async function saveDocument(event, type) {
@@ -390,6 +403,7 @@ async function saveDocument(event, type) {
   const key = type === "Presupuesto" ? "budget" : "delivery";
   const data = formData(event.target);
   const items = collectItems(key);
+  const currentDoc = state[`${key}Detail`]?.document || {};
   const invalidItem = items.find((item) => item.quantity <= 0 || item.unit_price < 0);
   if (!data.client_id) return toast("Seleccione cliente.", "error");
   if (!data.date) return toast("La fecha es obligatoria.", "error");
@@ -407,6 +421,7 @@ async function saveDocument(event, type) {
         address: data.address,
         phone: data.phone,
         status: data.status,
+        show_iva: type === "Presupuesto" ? (data.show_iva === "1" ? 1 : 0) : (documentShowsIva(currentDoc) ? 1 : 0),
         observations: data.observations,
         invoice_number: data.invoice_number || "",
         source_document_id: null,
