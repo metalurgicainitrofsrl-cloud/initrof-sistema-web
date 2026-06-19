@@ -318,9 +318,8 @@ def draw_delivery_sale_block(c: canvas.Canvas, company: dict, doc: dict, left: f
     c.setFont("Helvetica-Bold", 12)
     c.drawCentredString(left + iva_w / 2, bottom + 10.5 * mm, "I V A")
     c.setFont("Helvetica", 7)
-    iva_value = infer_client_iva(doc)
-    c.drawString(left + iva_w + 4 * mm, bottom + 11 * mm, iva_value)
-    draw_checkbox(c, left + iva_w + 38 * mm, bottom + 9.5 * mm, checked=iva_value.lower().startswith("resp"))
+    c.drawString(left + iva_w + 4 * mm, bottom + 11 * mm, "Resp. Inscripto")
+    draw_checkbox(c, left + iva_w + 38 * mm, bottom + 9.5 * mm, checked=is_client_resp_inscripto(doc))
     c.drawString(cuit_x + 3 * mm, bottom + 11 * mm, "C.U.I.T.")
     c.setFont("Helvetica", 8)
     c.drawString(cuit_x + 21 * mm, bottom + 11 * mm, str(doc.get("client_cuit") or ""))
@@ -488,6 +487,8 @@ def split_date(value: str) -> tuple[str, str, str]:
 
 
 def infer_client_iva(doc: dict) -> str:
+    if doc.get("client_resp_inscripto") is not None:
+        return "Resp. Inscripto" if is_client_resp_inscripto(doc) else ""
     notes = (doc.get("client_notes") or "").lower()
     if "monotrib" in notes:
         return "Monotributo"
@@ -496,6 +497,13 @@ def infer_client_iva(doc: dict) -> str:
     if "final" in notes:
         return "Consumidor Final"
     return "Resp. Inscripto"
+
+
+def is_client_resp_inscripto(doc: dict) -> bool:
+    value = doc.get("client_resp_inscripto")
+    if value is not None:
+        return str(value).lower() not in {"0", "false", "no", "off"}
+    return infer_client_iva(doc).lower().startswith("resp")
 
 
 def draw_work_order(c: canvas.Canvas, company: dict, order: dict, include_qr: bool) -> None:

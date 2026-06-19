@@ -89,10 +89,11 @@ def reserve_number(conn, doc_type: str) -> str:
 def save_document(doc: dict, items: list[dict]) -> int:
     subtotal = sum(float(item["quantity"]) * float(item["unit_price"]) for item in items)
     show_iva = 0 if str(doc.get("show_iva", 1)).lower() in {"0", "false", "no", "off"} else 1
+    client_resp_inscripto = 0 if str(doc.get("client_resp_inscripto", 1)).lower() in {"0", "false", "no", "off"} else 1
     iva = round(subtotal * 0.21, 2) if show_iva else 0
     total = round(subtotal + iva, 2)
-    doc["subtotal"], doc["iva"], doc["total"], doc["show_iva"] = subtotal, iva, total, show_iva
-    fields = ["doc_type", "number", "date", "client_id", "contact", "address", "phone", "status", "subtotal", "iva", "total", "show_iva", "observations", "invoice_number", "source_document_id"]
+    doc["subtotal"], doc["iva"], doc["total"], doc["show_iva"], doc["client_resp_inscripto"] = subtotal, iva, total, show_iva, client_resp_inscripto
+    fields = ["doc_type", "number", "date", "client_id", "contact", "address", "phone", "status", "subtotal", "iva", "total", "show_iva", "client_resp_inscripto", "observations", "invoice_number", "source_document_id"]
     with session() as conn:
         apply_client_document_defaults(conn, doc)
         if doc.get("id"):

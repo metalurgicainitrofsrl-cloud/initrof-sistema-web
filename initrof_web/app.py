@@ -179,6 +179,7 @@ def convert_to_remito(document_id: int, user: dict = Depends(require_user)):
         "observations": f"Generado desde presupuesto {doc['number']}",
         "invoice_number": "",
         "show_iva": doc.get("show_iva", 1),
+        "client_resp_inscripto": doc.get("client_resp_inscripto", 1),
         "source_document_id": document_id,
     }
     remito_id = repo.save_document(new_doc, items)

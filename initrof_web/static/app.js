@@ -145,6 +145,16 @@ function documentShowsIva(doc = {}) {
   return doc.show_iva === undefined || doc.show_iva === null || String(doc.show_iva) !== "0";
 }
 
+function documentClientRespInscripto(doc = {}) {
+  return doc.client_resp_inscripto === undefined || doc.client_resp_inscripto === null || String(doc.client_resp_inscripto) !== "0";
+}
+
+function clientDefaultRespInscripto(client = {}) {
+  const notes = String(client.notes || "").toLowerCase();
+  if (notes.includes("monotrib") || notes.includes("exento") || notes.includes("final")) return false;
+  return true;
+}
+
 async function loadAll() {
   const data = await api("/api/bootstrap");
   Object.assign(state, {
@@ -292,6 +302,9 @@ async function fillDocumentClientFields(type) {
   form.elements.contact.value = client.contact_name || client.business_name || "";
   form.elements.address.value = client.address || "";
   form.elements.phone.value = client.phone || client.whatsapp || "";
+  if (key === "delivery" && form.elements.client_resp_inscripto) {
+    form.elements.client_resp_inscripto.checked = clientDefaultRespInscripto(client);
+  }
 }
 
 function renderDocuments(type) {
@@ -331,6 +344,7 @@ function renderDocumentForm(type, doc = {}, items = null) {
     input("contact", "Contacto", doc.contact),
     input("phone", "Telefono", doc.phone),
     type === "Remito" ? input("invoice_number", "Factura nro", doc.invoice_number) : "",
+    type === "Remito" ? checkbox("client_resp_inscripto", "Cliente Resp. Inscripto", documentClientRespInscripto(doc)) : "",
     input("address", "Direccion", doc.address, "text", "full"),
     `</div>`,
     `<label>Items</label><div class="item-actions"><button type="button" id="${key}-add-item">Agregar item</button><button type="button" class="secondary" id="${key}-remove-item">Quitar ultimo</button></div>`,
@@ -422,6 +436,7 @@ async function saveDocument(event, type) {
         phone: data.phone,
         status: data.status,
         show_iva: type === "Presupuesto" ? (data.show_iva === "1" ? 1 : 0) : (documentShowsIva(currentDoc) ? 1 : 0),
+        client_resp_inscripto: type === "Remito" ? (data.client_resp_inscripto === "1" ? 1 : 0) : (documentClientRespInscripto(currentDoc) ? 1 : 0),
         observations: data.observations,
         invoice_number: data.invoice_number || "",
         source_document_id: null,

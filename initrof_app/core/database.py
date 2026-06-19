@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS documents (
     iva REAL NOT NULL DEFAULT 0,
     total REAL NOT NULL DEFAULT 0,
     show_iva INTEGER NOT NULL DEFAULT 1,
+    client_resp_inscripto INTEGER NOT NULL DEFAULT 1,
     observations TEXT,
     invoice_number TEXT,
     source_document_id INTEGER REFERENCES documents(id),
@@ -189,6 +190,8 @@ def migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE documents ADD COLUMN invoice_number TEXT")
     if "show_iva" not in document_columns:
         conn.execute("ALTER TABLE documents ADD COLUMN show_iva INTEGER NOT NULL DEFAULT 1")
+    if "client_resp_inscripto" not in document_columns:
+        conn.execute("ALTER TABLE documents ADD COLUMN client_resp_inscripto INTEGER NOT NULL DEFAULT 1")
     sync_sequence(conn, "Presupuesto", "documents", "doc_type = 'Presupuesto'")
     sync_sequence(conn, "Remito", "documents", "doc_type = 'Remito'")
     sync_sequence(conn, "Orden", "work_orders", "1 = 1")
