@@ -150,6 +150,7 @@ def initialize_database() -> None:
         conn.executescript(SCHEMA)
         migrate(conn)
         seed(conn)
+        apply_current_remito_cai(conn)
 
 
 def migrate(conn: sqlite3.Connection) -> None:
@@ -192,10 +193,11 @@ def migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE documents ADD COLUMN show_iva INTEGER NOT NULL DEFAULT 1")
     if "client_resp_inscripto" not in document_columns:
         conn.execute("ALTER TABLE documents ADD COLUMN client_resp_inscripto INTEGER NOT NULL DEFAULT 1")
+    apply_current_remito_cai(conn)
     sync_sequence(conn, "Presupuesto", "documents", "doc_type = 'Presupuesto'")
     sync_sequence(conn, "Remito", "documents", "doc_type = 'Remito'")
     sync_sequence(conn, "Orden", "work_orders", "1 = 1")
-    conn.execute("UPDATE number_sequences SET last_number = MAX(last_number, 183) WHERE key = 'Remito'")
+    conn.execute("UPDATE number_sequences SET last_number = MAX(last_number, 200) WHERE key = 'Remito'")
     work_order_columns = {row["name"] for row in conn.execute("PRAGMA table_info(work_orders)").fetchall()}
     if "source_document_id" not in work_order_columns:
         conn.execute("ALTER TABLE work_orders ADD COLUMN source_document_id INTEGER REFERENCES documents(id)")
@@ -209,6 +211,24 @@ def sync_sequence(conn: sqlite3.Connection, key: str, table: str, where: str) ->
         if digits:
             max_value = max(max_value, int(digits[-6:]))
     conn.execute("UPDATE number_sequences SET last_number = MAX(last_number, ?) WHERE key = ?", (max_value, key))
+
+
+def apply_current_remito_cai(conn: sqlite3.Connection) -> None:
+    cai = "52269219201935"
+    cai_due = "25/06/2027"
+    row = conn.execute("SELECT remito_cai, remito_cai_due FROM company WHERE id = 1").fetchone()
+    if not row:
+        return
+    current_cai = str(row["remito_cai"] or "").strip()
+    current_due = str(row["remito_cai_due"] or "").strip()
+    if current_cai in {"", "51129212089389"}:
+        current_cai = cai
+    if current_due in {"", "20-03-2026", "20/03/2026"}:
+        current_due = cai_due
+    conn.execute(
+        "UPDATE company SET remito_cai = ?, remito_cai_due = ? WHERE id = 1",
+        (current_cai, current_due),
+    )
 
 
 def seed(conn: sqlite3.Connection) -> None:
