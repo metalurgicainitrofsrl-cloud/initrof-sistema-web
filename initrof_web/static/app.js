@@ -334,6 +334,7 @@ function renderDocumentForm(type, doc = {}, items = null) {
     : ["Pendiente", "Entregado", "Facturado", "Anulado"];
   const currentItems = items || [{ quantity: 1, description: "", unit: "u", unit_price: 0 }];
   const voidButton = state.selected[key] ? `<button type="button" class="danger" id="${key}-void">Anular ${type.toLowerCase()}</button>` : "";
+  const deleteButton = state.selected[key] ? `<button type="button" class="danger" id="${key}-delete">Eliminar ${type.toLowerCase()}</button>` : "";
   $(`${key}-form`).innerHTML = [
     `<div class="form-grid">`,
     input("number", "Numero", doc.number || "Se asigna al guardar", "text", "", "readonly"),
@@ -351,7 +352,7 @@ function renderDocumentForm(type, doc = {}, items = null) {
     `<table class="items" id="${key}-items"><thead><tr><th>Cant.</th><th>Descripcion</th><th>Unidad</th><th>P. unitario</th><th>Subtotal</th></tr></thead><tbody>${currentItems.map(itemRow).join("")}</tbody></table>`,
     `<div class="totals" id="${key}-total"></div>`,
     textarea("observations", "Observaciones", doc.observations || ""),
-    `<button>Guardar ${type.toLowerCase()}</button> <button type="button" class="secondary" id="${key}-clear">Limpiar</button> ${voidButton}`,
+    `<button>Guardar ${type.toLowerCase()}</button> <button type="button" class="secondary" id="${key}-clear">Limpiar</button> ${voidButton} ${deleteButton}`,
   ].join("");
   $(`${key}-form`).onsubmit = (event) => saveDocument(event, type);
   $(`${key}-form`).elements.client_id.onchange = () => guard(async () => fillDocumentClientFields(type));
@@ -359,6 +360,7 @@ function renderDocumentForm(type, doc = {}, items = null) {
   $(`${key}-remove-item`).onclick = () => { const tbody = $(`${key}-items`).querySelector("tbody"); if (tbody.children.length > 1) tbody.lastElementChild.remove(); updateTotals(key); };
   $(`${key}-clear`).onclick = () => newDocument(type);
   if ($(`${key}-void`)) $(`${key}-void`).onclick = () => voidSelectedDocument(type);
+  if ($(`${key}-delete`)) $(`${key}-delete`).onclick = () => deleteSelectedDocument(type);
   bindItemTotals(key);
 }
 
@@ -462,6 +464,31 @@ async function voidSelectedDocument(type) {
     await refreshLists();
     await selectDocument(type, state.selected[key]);
     toast(`${type} anulado.`, "success");
+  });
+}
+
+async function deleteSelectedDocument(type) {
+  const key = type === "Presupuesto" ? "budget" : "delivery";
+  if (!state.selected[key]) return toast("Seleccione un documento.", "error");
+  const label = type === "Remito" ? "remito" : "presupuesto";
+  if (!confirm(`Eliminar definitivamente este ${label}? Esta accion no se puede deshacer.`)) return;
+  await guard(async () => {
+    await api(`/api/documents/${state.selected[key]}`, { method: "DELETE" });
+    state.selected[key] = null;
+    state[`${key}Detail`] = null;
+    await refreshLists();
+    toast(`${type} eliminado.`, "success");
+  });
+}
+
+async function deleteTestDeliveryNotes() {
+  if (!confirm("Eliminar definitivamente todos los remitos de prueba anteriores al 201? No se tocaran los remitos 201 a 300.")) return;
+  await guard(async () => {
+    const result = await api("/api/documents/remitos/delete-test", { method: "POST" });
+    state.selected.delivery = null;
+    state.deliveryDetail = null;
+    await refreshLists();
+    toast(`Remitos de prueba eliminados: ${result.deleted}.`, "success");
   });
 }
 
@@ -633,6 +660,7 @@ function bindEvents() {
   on("new-client", "click", () => { state.selected.client = null; renderClients(); toast("Nuevo cliente listo para cargar.", "success"); });
   on("new-budget", "click", () => newDocument("Presupuesto"));
   on("new-delivery", "click", () => newDocument("Remito"));
+  on("delete-test-delivery", "click", deleteTestDeliveryNotes);
   on("new-order", "click", () => { state.selected.order = null; state.orderDetail = null; renderOrderForm(); renderOrders(); toast("Nueva orden lista para cargar.", "success"); });
   on("edit-order", "click", () => {
     if (!state.selected.order) return toast("Seleccione una orden de la lista para editar.", "error");

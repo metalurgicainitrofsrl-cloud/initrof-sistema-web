@@ -48,9 +48,36 @@ def get_client(client_id: int) -> dict | None:
         return dict(row) if row else None
 
 
-def delete_document(document_id: int) -> None:
+def delete_document(document_id: int) -> bool:
     with session() as conn:
+        row = conn.execute("SELECT doc_type, number FROM documents WHERE id = ?", (document_id,)).fetchone()
+        if not row:
+            return False
         conn.execute("DELETE FROM documents WHERE id = ?", (document_id,))
+        conn.execute(
+            "INSERT INTO history(entity_type, entity_id, action, detail) VALUES (?, ?, 'Eliminar', ?)",
+            (row["doc_type"], document_id, row["number"]),
+        )
+        return True
+
+
+def delete_test_delivery_notes(max_number: int = 200) -> int:
+    with session() as conn:
+        rows = conn.execute("SELECT id, number FROM documents WHERE doc_type = 'Remito'").fetchall()
+        ids_to_delete = []
+        for row in rows:
+            digits = "".join(ch for ch in str(row["number"]) if ch.isdigit())
+            number = int(digits[-6:]) if digits else 0
+            if 0 < number <= max_number:
+                ids_to_delete.append(row["id"])
+        if not ids_to_delete:
+            return 0
+        conn.executemany("DELETE FROM documents WHERE id = ?", [(doc_id,) for doc_id in ids_to_delete])
+        conn.execute(
+            "INSERT INTO history(entity_type, entity_id, action, detail) VALUES ('Remito', 0, 'Eliminar remitos de prueba', ?)",
+            (f"Eliminados {len(ids_to_delete)} remitos hasta numero {max_number}",),
+        )
+        return len(ids_to_delete)
 
 
 def void_document(document_id: int) -> bool:

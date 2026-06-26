@@ -162,6 +162,25 @@ def void_document(document_id: int, user: dict = Depends(require_user)):
     return {"document": doc, "items": items}
 
 
+@app.delete("/api/documents/{document_id}")
+def delete_document(document_id: int, user: dict = Depends(require_user)):
+    doc, _items = repo.get_document(document_id)
+    if doc["doc_type"] == "Remito":
+        digits = "".join(ch for ch in str(doc["number"]) if ch.isdigit())
+        number = int(digits[-6:]) if digits else 0
+        if number >= 201:
+            raise HTTPException(400, "Los remitos del rango autorizado 201-300 no se eliminan desde esta opcion. Use Anular si corresponde.")
+    if not web_repo.delete_document(document_id):
+        raise HTTPException(404, "Documento no encontrado")
+    return {"deleted": True}
+
+
+@app.post("/api/documents/remitos/delete-test")
+def delete_test_delivery_notes(user: dict = Depends(require_user)):
+    deleted = web_repo.delete_test_delivery_notes(200)
+    return {"deleted": deleted}
+
+
 @app.post("/api/documents/{document_id}/convert-to-remito")
 def convert_to_remito(document_id: int, user: dict = Depends(require_user)):
     doc, items = repo.get_document(document_id)
