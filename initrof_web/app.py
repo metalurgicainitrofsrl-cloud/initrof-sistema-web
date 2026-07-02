@@ -97,6 +97,67 @@ def logo():
     return FileResponse(path)
 
 
+@app.get("/validar/presupuesto/{token}", response_class=HTMLResponse)
+def public_budget_validation_page(request: Request, token: str):
+    doc, items = repo.get_document_by_validation_token(token)
+    if not doc:
+        raise HTTPException(404, "Validacion no encontrada")
+    return templates.TemplateResponse(
+        request,
+        "budget_validation.html",
+        {
+            "company": repo.fetch_company(),
+            "document": doc,
+            "items": items,
+            "token": token,
+            "money": money,
+            "submitted": False,
+            "logo_url": "/logo",
+        },
+    )
+
+
+@app.post("/validar/presupuesto/{token}", response_class=HTMLResponse)
+def public_budget_validation_submit(
+    request: Request,
+    token: str,
+    decision: str = Form(...),
+    signer_name: str = Form(""),
+    signer_identifier: str = Form(""),
+    signer_email: str = Form(""),
+    comments: str = Form(""),
+):
+    if decision not in {"Aprobado", "Rechazado"}:
+        raise HTTPException(400, "Decision invalida")
+    result = repo.record_document_validation_decision(
+        token,
+        {
+            "decision": decision,
+            "signer_name": signer_name.strip(),
+            "signer_identifier": signer_identifier.strip(),
+            "signer_email": signer_email.strip(),
+            "comments": comments.strip(),
+            "ip_address": request.client.host if request.client else "",
+            "user_agent": request.headers.get("user-agent", ""),
+        },
+    )
+    if not result:
+        raise HTTPException(404, "Validacion no encontrada")
+    return templates.TemplateResponse(
+        request,
+        "budget_validation.html",
+        {
+            "company": repo.fetch_company(),
+            "document": result["document"],
+            "items": result["items"],
+            "token": token,
+            "money": money,
+            "submitted": True,
+            "logo_url": "/logo",
+        },
+    )
+
+
 @app.get("/api/bootstrap")
 def bootstrap(user: dict = Depends(require_user)):
     return {
@@ -287,12 +348,20 @@ async def password(request: Request, user: dict = Depends(require_user)):
 
 @app.get("/pdf/document/{document_id}")
 def document_pdf(document_id: int, user: dict = Depends(require_user)):
-    return FileResponse(export_document_pdf(document_id), media_type="application/pdf")
+    return FileResponse(
+        export_document_pdf(document_id),
+        media_type="application/pdf",
+        headers={"Cache-Control": "no-store, max-age=0"},
+    )
 
 
 @app.get("/pdf/order/{order_id}")
 def order_pdf(order_id: int, user: dict = Depends(require_user)):
-    return FileResponse(export_work_order_pdf(order_id), media_type="application/pdf")
+    return FileResponse(
+        export_work_order_pdf(order_id),
+        media_type="application/pdf",
+        headers={"Cache-Control": "no-store, max-age=0"},
+    )
 
 
 @app.get("/health")
@@ -349,3 +418,7 @@ def build_work_order_requested_work(doc: dict, items: list[dict]) -> str:
         description = item.get("description") or ""
         lines.append(f"- {quantity} {unit} - {description}")
     return "\n".join(lines)
+
+
+def money(value: float) -> str:
+    return f"$ {float(value or 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
