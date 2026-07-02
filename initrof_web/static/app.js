@@ -505,7 +505,8 @@ function openSelectedPdf(type) {
   const key = type === "Presupuesto" ? "budget" : type === "Remito" ? "delivery" : "order";
   const id = state.selected[key];
   if (!id) return toast("Seleccione un registro primero.", "error");
-  window.open(type === "Orden" ? `/pdf/order/${id}` : `/pdf/document/${id}`, "_blank");
+  const cacheBust = Date.now();
+  window.open(type === "Orden" ? `/pdf/order/${id}?v=${cacheBust}` : `/pdf/document/${id}?v=${cacheBust}`, "_blank");
 }
 
 async function convertSelectedBudget() {
@@ -601,7 +602,8 @@ function renderPrinting() {
 function openPrintable() {
   if (!state.selected.print) return toast("Seleccione un documento.", "error");
   const [type, id] = String(state.selected.print).split(":");
-  window.open(type === "Orden de Trabajo" ? `/pdf/order/${id}` : `/pdf/document/${id}`, "_blank");
+  const cacheBust = Date.now();
+  window.open(type === "Orden de Trabajo" ? `/pdf/order/${id}?v=${cacheBust}` : `/pdf/document/${id}?v=${cacheBust}`, "_blank");
 }
 
 function renderCompany() {
