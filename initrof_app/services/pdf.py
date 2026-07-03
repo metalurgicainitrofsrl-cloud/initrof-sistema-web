@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from reportlab.graphics import renderPDF
@@ -174,7 +175,7 @@ def draw_document(c: canvas.Canvas, company: dict, doc: dict, items: list[dict],
     c.drawString(width - margin - 70 * mm, sig_y - 5 * mm, "Firma cliente / Aclaracion / Fecha")
 
     if include_qr:
-        draw_validation_qr(c, width - margin - 28 * mm, sig_y - 22 * mm, doc)
+        draw_validation_qr(c, width - margin - 28 * mm, sig_y - 22 * mm, doc, company)
     footer(c, company, 1)
 
 
@@ -574,7 +575,7 @@ def draw_work_order(c: canvas.Canvas, company: dict, order: dict, include_qr: bo
     c.drawString(margin, 37 * mm, "Firma responsable / Aclaracion / Fecha")
     c.drawString(width - margin - 70 * mm, 37 * mm, "Firma cliente / Aclaracion / Fecha")
     if include_qr:
-        draw_validation_qr(c, width - margin - 28 * mm, 18 * mm, {"doc_type": "Orden de Trabajo", "number": order["number"], "date": order["start_date"], "total": 0})
+        draw_validation_qr(c, width - margin - 28 * mm, 18 * mm, {"doc_type": "Orden de Trabajo", "number": order["number"], "date": order["start_date"], "total": 0}, company)
     footer(c, company, 1)
 
 
@@ -662,8 +663,8 @@ def total_line(c, x, y, label, value, bold):
     c.drawRightString(x + 54 * mm, y, value)
 
 
-def draw_validation_qr(c, x, y, doc):
-    payload = f"INITROF SRL | {doc['doc_type']} {doc['number']} | {doc['date']} | Total {doc['total']}"
+def draw_validation_qr(c, x, y, doc, company):
+    payload = validation_payload(doc, company)
     size = 24 * mm
     qr = QrCodeWidget(payload)
     bounds = qr.getBounds()
@@ -672,6 +673,24 @@ def draw_validation_qr(c, x, y, doc):
     renderPDF.draw(drawing, c, x, y)
     c.setFont("Helvetica", 6)
     c.drawCentredString(x + size / 2, y - 3 * mm, "Validacion digital")
+
+
+def validation_payload(doc: dict, company: dict) -> str:
+    if doc.get("doc_type") == "Presupuesto" and doc.get("id"):
+        token = repo.get_or_create_validation_token(int(doc["id"]))
+        base_url = public_base_url(company)
+        if base_url:
+            return f"{base_url}/validar/presupuesto/{token}"
+    return f"INITROF SRL | {doc['doc_type']} {doc['number']} | {doc['date']} | Total {doc['total']}"
+
+
+def public_base_url(company: dict) -> str:
+    value = (os.environ.get("INITROF_PUBLIC_URL") or company.get("website") or "").strip()
+    if not value:
+        return ""
+    if not value.startswith(("http://", "https://")):
+        value = f"https://{value}"
+    return value.rstrip("/")
 
 
 def footer(c, company: dict, page: int):
