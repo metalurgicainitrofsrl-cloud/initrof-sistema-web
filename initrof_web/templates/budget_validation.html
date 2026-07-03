@@ -74,11 +74,11 @@
         <tbody>
           {% for item in items %}
             <tr>
-              <td>{{ item.quantity }}</td>
-              <td>{{ item.description }}</td>
-              <td>{{ item.unit }}</td>
-              <td>{{ money(item.unit_price) }}</td>
-              <td>{{ money(item.subtotal) }}</td>
+              <td data-label="Cant.">{{ item.quantity }}</td>
+              <td data-label="Descripcion">{{ item.description }}</td>
+              <td data-label="Unidad">{{ item.unit }}</td>
+              <td data-label="Precio">{{ money(item.unit_price) }}</td>
+              <td data-label="Subtotal">{{ money(item.subtotal) }}</td>
             </tr>
           {% endfor %}
         </tbody>
