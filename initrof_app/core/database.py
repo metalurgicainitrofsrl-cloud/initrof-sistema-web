@@ -122,6 +122,26 @@ CREATE TABLE IF NOT EXISTS number_sequences (
     prefix TEXT NOT NULL,
     last_number INTEGER NOT NULL DEFAULT 0
 );
+
+CREATE TABLE IF NOT EXISTS document_validation_tokens (
+    document_id INTEGER PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,
+    token TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS document_validation_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    token TEXT NOT NULL,
+    decision TEXT NOT NULL CHECK(decision IN ('Aprobado','Rechazado')),
+    signer_name TEXT,
+    signer_identifier TEXT,
+    signer_email TEXT,
+    comments TEXT,
+    ip_address TEXT,
+    user_agent TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 
