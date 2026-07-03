@@ -117,7 +117,13 @@ tr.selected.status-row td { background: #ddecfb; }
 .validation-result { margin-bottom: 16px; }
 .validation-result.success { background: #ecfdf3; border-color: #bbf7d0; color: #166534; }
 .validation-result.danger { background: #fff1f2; border-color: #fecdd3; color: #991b1b; }
-.validation-table { min-width: 760px; }
+.validation-table { min-width: 760px; table-layout: fixed; }
+.validation-table th:nth-child(1), .validation-table td:nth-child(1) { width: 58px; }
+.validation-table th:nth-child(2), .validation-table td:nth-child(2) { width: auto; }
+.validation-table th:nth-child(3), .validation-table td:nth-child(3) { width: 74px; }
+.validation-table th:nth-child(4), .validation-table td:nth-child(4),
+.validation-table th:nth-child(5), .validation-table td:nth-child(5) { width: 118px; }
+.validation-table td { overflow-wrap: anywhere; word-break: normal; }
 .validation-observations { background: #f8fafc; border: 1px solid var(--line); border-radius: 6px; color: #334155; margin: 14px 0 0; padding: 12px; }
 
 @media (max-width: 1100px) {
@@ -142,4 +148,12 @@ tr.selected.status-row td { background: #ddecfb; }
   .validation-header h1 { font-size: 24px; }
   .validation-grid { grid-template-columns: 1fr; }
   .validation-actions { flex-direction: column; }
+  .validation-panel { overflow: visible; padding: 14px; }
+  .validation-table { border-collapse: separate; border-spacing: 0 10px; min-width: 0; table-layout: auto; }
+  .validation-table thead { display: none; }
+  .validation-table, .validation-table tbody, .validation-table tr, .validation-table td { display: block; width: 100%; }
+  .validation-table tr { background: #f8fafc; border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
+  .validation-table td { align-items: start; border-bottom: 1px solid #e5edf5; display: grid; gap: 10px; grid-template-columns: 82px minmax(0, 1fr); padding: 8px 0; white-space: normal; }
+  .validation-table td:last-child { border-bottom: 0; }
+  .validation-table td::before { color: var(--muted); content: attr(data-label); font-size: 12px; font-weight: 800; text-transform: uppercase; }
 }
