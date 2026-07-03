@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import secrets
 from datetime import date
 
 from initrof_app.core.database import session
@@ -193,6 +194,110 @@ def get_document(document_id: int):
         ).fetchone())
         items = [dict(row) for row in conn.execute("SELECT * FROM document_items WHERE document_id = ? ORDER BY id", (document_id,)).fetchall()]
         return doc, items
+
+
+def get_or_create_validation_token(document_id: int) -> str:
+    with session() as conn:
+        doc = conn.execute("SELECT doc_type FROM documents WHERE id = ?", (document_id,)).fetchone()
+        if not doc:
+            raise ValueError("El documento no existe")
+        if doc["doc_type"] != "Presupuesto":
+            raise ValueError("Solo los presupuestos tienen validacion digital")
+        existing = conn.execute("SELECT token FROM document_validation_tokens WHERE document_id = ?", (document_id,)).fetchone()
+        if existing:
+            return existing["token"]
+        while True:
+            token = secrets.token_urlsafe(24)
+            try:
+                conn.execute(
+                    "INSERT INTO document_validation_tokens(document_id, token) VALUES (?, ?)",
+                    (document_id, token),
+                )
+                return token
+            except Exception:
+                if conn.execute("SELECT 1 FROM document_validation_tokens WHERE token = ?", (token,)).fetchone():
+                    continue
+                raise
+
+
+def get_document_by_validation_token(token: str):
+    with session() as conn:
+        token_row = conn.execute(
+            """
+            SELECT dvt.token, dvt.created_at AS token_created_at, d.*
+            FROM document_validation_tokens dvt
+            JOIN documents d ON d.id = dvt.document_id
+            WHERE dvt.token = ? AND d.doc_type = 'Presupuesto'
+            """,
+            (token,),
+        ).fetchone()
+        if not token_row:
+            return None, []
+        doc = dict(token_row)
+        client = conn.execute("SELECT business_name, cuit, email, phone FROM clients WHERE id = ?", (doc["client_id"],)).fetchone()
+        if client:
+            doc.update(
+                {
+                    "client_name": client["business_name"],
+                    "client_cuit": client["cuit"],
+                    "client_email": client["email"],
+                    "client_phone": client["phone"],
+                }
+            )
+        items = [dict(row) for row in conn.execute("SELECT * FROM document_items WHERE document_id = ? ORDER BY id", (doc["id"],)).fetchall()]
+        decision = conn.execute(
+            "SELECT * FROM document_validation_events WHERE document_id = ? ORDER BY id DESC LIMIT 1",
+            (doc["id"],),
+        ).fetchone()
+        doc["validation_event"] = dict(decision) if decision else None
+        return doc, items
+
+
+def record_document_validation_decision(token: str, data: dict) -> dict | None:
+    decision = "Aprobado" if data.get("decision") == "Aprobado" else "Rechazado"
+    document_id = None
+    with session() as conn:
+        row = conn.execute(
+            """
+            SELECT d.id, d.number, d.status
+            FROM document_validation_tokens dvt
+            JOIN documents d ON d.id = dvt.document_id
+            WHERE dvt.token = ? AND d.doc_type = 'Presupuesto'
+            """,
+            (token,),
+        ).fetchone()
+        if not row:
+            return None
+        document_id = row["id"]
+        if row["status"] != "Anulado":
+            conn.execute(
+                "UPDATE documents SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (decision, document_id),
+            )
+        conn.execute(
+            """
+            INSERT INTO document_validation_events
+            (document_id, token, decision, signer_name, signer_identifier, signer_email, comments, ip_address, user_agent)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                document_id,
+                token,
+                decision,
+                data.get("signer_name"),
+                data.get("signer_identifier"),
+                data.get("signer_email"),
+                data.get("comments"),
+                data.get("ip_address"),
+                data.get("user_agent"),
+            ),
+        )
+        conn.execute(
+            "INSERT INTO history(entity_type, entity_id, action, detail) VALUES ('Presupuesto', ?, ?, ?)",
+            (document_id, f"Validacion digital: {decision}", row["number"]),
+        )
+    doc, items = get_document_by_validation_token(token)
+    return {"document": doc, "items": items}
 
 
 def save_work_order(data: dict) -> int:
