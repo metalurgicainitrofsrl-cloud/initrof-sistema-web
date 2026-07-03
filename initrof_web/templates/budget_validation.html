@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Validacion digital {{ document.number }}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="validation-page">
+  <main class="validation-shell">
+    <header class="validation-header">
+      <img src="{{ logo_url }}" alt="{{ company.name }}" class="validation-logo">
+      <div>
+        <span>Validacion digital</span>
+        <h1>Presupuesto {{ document.number }}</h1>
+      </div>
+      <strong class="status-badge status-{{ document.status|lower|replace(' ', '-') }}">{{ document.status }}</strong>
+    </header>
+
+    {% if submitted %}
+      <section class="validation-result {{ 'success' if document.status == 'Aprobado' else 'danger' }}">
+        <h2>Decision registrada</h2>
+        <p>El presupuesto quedo marcado como {{ document.status }}.</p>
+      </section>
+    {% endif %}
+
+    {% if document.validation_event and not submitted %}
+      <section class="validation-result">
+        <h2>Este presupuesto ya fue validado</h2>
+        <p>Ultima decision: {{ document.validation_event.decision }}.</p>
+      </section>
+    {% endif %}
+
+    <section class="validation-grid">
+      <article class="validation-panel">
+        <h2>Datos del presupuesto</h2>
+        <dl class="validation-data">
+          <div><dt>Cliente</dt><dd>{{ document.client_name }}</dd></div>
+          <div><dt>Fecha</dt><dd>{{ document.date }}</dd></div>
+          <div><dt>CUIT</dt><dd>{{ document.client_cuit or '-' }}</dd></div>
+          <div><dt>Total</dt><dd>{{ money(document.total) }}</dd></div>
+        </dl>
+      </article>
+
+      <article class="validation-panel">
+        <h2>Autorizar</h2>
+        {% if document.status == 'Anulado' %}
+          <p class="hint">Este presupuesto fue anulado y no admite validacion.</p>
+        {% else %}
+          <form method="post" class="validation-form">
+            <label>Nombre y apellido</label>
+            <input name="signer_name" value="{{ document.contact or '' }}" autocomplete="name">
+            <label>DNI / CUIT / cargo</label>
+            <input name="signer_identifier">
+            <label>Email</label>
+            <input name="signer_email" type="email" value="{{ document.client_email or '' }}" autocomplete="email">
+            <label>Comentario</label>
+            <textarea name="comments"></textarea>
+            <div class="validation-actions">
+              <button name="decision" value="Aprobado">Aprobar presupuesto</button>
+              <button name="decision" value="Rechazado" class="danger">Rechazar</button>
+            </div>
+          </form>
+        {% endif %}
+      </article>
+    </section>
+
+    <section class="validation-panel">
+      <h2>Detalle</h2>
+      <table class="validation-table">
+        <thead>
+          <tr><th>Cant.</th><th>Descripcion</th><th>Unidad</th><th>Precio</th><th>Subtotal</th></tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+            <tr>
+              <td>{{ item.quantity }}</td>
+              <td>{{ item.description }}</td>
+              <td>{{ item.unit }}</td>
+              <td>{{ money(item.unit_price) }}</td>
+              <td>{{ money(item.subtotal) }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if document.observations %}
+        <p class="validation-observations">{{ document.observations }}</p>
+      {% endif %}
+    </section>
+  </main>
+</body>
+</html>
