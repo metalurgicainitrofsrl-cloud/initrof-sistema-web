@@ -72,6 +72,7 @@ def draw_document(c: canvas.Canvas, company: dict, doc: dict, items: list[dict],
         return
     width, height = A4
     margin = 16 * mm
+    page = 1
     y = height - margin
 
     c.setFillColor(DARK)
@@ -125,8 +126,9 @@ def draw_document(c: canvas.Canvas, company: dict, doc: dict, items: list[dict],
     for item in items:
         item_height = item_row_height(c, width - 2 * margin, item)
         if y - item_height < 64 * mm:
-            footer(c, company, 1)
+            footer(c, company, page)
             c.showPage()
+            page += 1
             y = height - margin
             table_header(c, margin, y, width - 2 * margin)
             y -= 8 * mm
@@ -152,11 +154,21 @@ def draw_document(c: canvas.Canvas, company: dict, doc: dict, items: list[dict],
     c.drawString(totals_x + 6 * mm, total_box_y + 3 * mm, "TOTAL GENERAL")
     c.drawRightString(totals_x + 59 * mm, total_box_y + 3 * mm, money(doc["total"]))
 
-    obs_y = y - 38 * mm
-    section_title(c, margin, obs_y, "Observaciones")
     obs_lines = wrap_text(c, doc.get("observations") or "Sin observaciones.", "Helvetica", 9, width - 2 * margin - 10 * mm)
-    obs_box_top = obs_y - 6 * mm
     obs_box_height = max(18 * mm, (len(obs_lines) * 5 + 6) * mm)
+    obs_y = y - 38 * mm
+    obs_box_top = obs_y - 6 * mm
+    sig_y = obs_box_top - obs_box_height - 32 * mm
+    if sig_y - 22 * mm < 18 * mm:
+        footer(c, company, page)
+        c.showPage()
+        page += 1
+        y = height - margin
+        obs_y = y - 10 * mm
+        obs_box_top = obs_y - 6 * mm
+        sig_y = obs_box_top - obs_box_height - 32 * mm
+
+    section_title(c, margin, obs_y, "Observaciones")
     c.setFillColor(LIGHT)
     c.roundRect(margin, obs_box_top - obs_box_height, width - 2 * margin, obs_box_height, 2.5 * mm, fill=True, stroke=False)
     c.setFillColor(DARK)
@@ -164,7 +176,6 @@ def draw_document(c: canvas.Canvas, company: dict, doc: dict, items: list[dict],
     for idx, line in enumerate(obs_lines):
         c.drawString(margin + 5 * mm, obs_box_top - (7 + idx * 5) * mm, line)
 
-    sig_y = obs_box_top - obs_box_height - 32 * mm
     draw_company_signature(c, margin, sig_y)
     c.setStrokeColor(MID)
     c.line(margin, sig_y, margin + 70 * mm, sig_y)
@@ -176,7 +187,7 @@ def draw_document(c: canvas.Canvas, company: dict, doc: dict, items: list[dict],
 
     if include_qr:
         draw_validation_qr(c, width - margin - 28 * mm, sig_y - 22 * mm, doc, company)
-    footer(c, company, 1)
+    footer(c, company, page)
 
 
 def draw_delivery_note(c: canvas.Canvas, company: dict, doc: dict, items: list[dict], include_qr: bool) -> None:
