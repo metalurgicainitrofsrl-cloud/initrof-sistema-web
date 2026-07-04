@@ -95,7 +95,10 @@ def draw_document(c: canvas.Canvas, company: dict, doc: dict, items: list[dict],
     c.setFont("Helvetica", 8)
     c.drawCentredString(width - margin - 27 * mm, y - 20 * mm, doc["date"])
 
-    y -= 46 * mm
+    if include_qr:
+        draw_validation_qr(c, width - margin - 25 * mm, y - 46 * mm, doc, company, size_mm=20)
+
+    y -= 64 * mm
     section_title(c, margin, y, "Datos del cliente")
     y -= 8 * mm
     client_lines = [
@@ -125,7 +128,7 @@ def draw_document(c: canvas.Canvas, company: dict, doc: dict, items: list[dict],
     y -= 8 * mm
     for item in items:
         item_height = item_row_height(c, width - 2 * margin, item)
-        if y - item_height < 64 * mm:
+        if y - item_height < 30 * mm:
             footer(c, company, page)
             c.showPage()
             page += 1
@@ -159,7 +162,7 @@ def draw_document(c: canvas.Canvas, company: dict, doc: dict, items: list[dict],
     obs_y = y - 38 * mm
     obs_box_top = obs_y - 6 * mm
     sig_y = obs_box_top - obs_box_height - 32 * mm
-    if sig_y - 22 * mm < 18 * mm:
+    if sig_y - 8 * mm < 18 * mm:
         footer(c, company, page)
         c.showPage()
         page += 1
@@ -185,8 +188,6 @@ def draw_document(c: canvas.Canvas, company: dict, doc: dict, items: list[dict],
     c.drawString(margin, sig_y - 5 * mm, "Firma empresa / Aclaracion / Fecha")
     c.drawString(width - margin - 70 * mm, sig_y - 5 * mm, "Firma cliente / Aclaracion / Fecha")
 
-    if include_qr:
-        draw_validation_qr(c, width - margin - 28 * mm, sig_y - 22 * mm, doc, company)
     footer(c, company, page)
 
 
@@ -674,9 +675,9 @@ def total_line(c, x, y, label, value, bold):
     c.drawRightString(x + 54 * mm, y, value)
 
 
-def draw_validation_qr(c, x, y, doc, company):
+def draw_validation_qr(c, x, y, doc, company, size_mm: float = 24):
     payload = validation_payload(doc, company)
-    size = 24 * mm
+    size = size_mm * mm
     qr = QrCodeWidget(payload)
     bounds = qr.getBounds()
     drawing = Drawing(size, size, transform=[size / (bounds[2] - bounds[0]), 0, 0, size / (bounds[3] - bounds[1]), 0, 0])
