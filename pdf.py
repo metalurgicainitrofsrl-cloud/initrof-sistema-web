@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import os
+from io import BytesIO
 from pathlib import Path
 
-from reportlab.graphics import renderPDF
 from reportlab.graphics.barcode import code128
-from reportlab.graphics.barcode.qr import QrCodeWidget
-from reportlab.graphics.shapes import Drawing
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
+from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
+import qrcode
 
 from initrof_app.core import repository as repo
 from initrof_app.core.paths import default_logo_path, exports_dir, resource_path
@@ -681,11 +681,14 @@ def draw_validation_qr(c, x, y, doc, company, size_mm: float = 24):
     quiet_zone = 3 * mm
     c.setFillColor(colors.white)
     c.rect(x - quiet_zone, y - quiet_zone, size + 2 * quiet_zone, size + 2 * quiet_zone, fill=True, stroke=False)
-    qr = QrCodeWidget(payload, barBorder=4, barLevel="H")
-    bounds = qr.getBounds()
-    drawing = Drawing(size, size, transform=[size / (bounds[2] - bounds[0]), 0, 0, size / (bounds[3] - bounds[1]), 0, 0])
-    drawing.add(qr)
-    renderPDF.draw(drawing, c, x, y)
+    qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=10, border=4)
+    qr.add_data(payload)
+    qr.make(fit=True)
+    image = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+    buffer.seek(0)
+    c.drawImage(ImageReader(buffer), x, y, width=size, height=size, mask="auto")
     c.setFont("Helvetica", 6)
     c.drawCentredString(x + size / 2, y - 3 * mm, "Validacion digital")
 
@@ -695,7 +698,7 @@ def validation_payload(doc: dict, company: dict) -> str:
         token = repo.get_or_create_validation_token(int(doc["id"]))
         base_url = public_base_url(company)
         if base_url:
-            return f"{base_url}/validar/presupuesto/{token}"
+            return f"{base_url}/v/{token}"
     return f"INITROF SRL | {doc['doc_type']} {doc['number']} | {doc['date']} | Total {doc['total']}"
 
 
