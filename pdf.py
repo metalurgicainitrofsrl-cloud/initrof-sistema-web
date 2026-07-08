@@ -96,9 +96,9 @@ def draw_document(c: canvas.Canvas, company: dict, doc: dict, items: list[dict],
     c.drawCentredString(width - margin - 27 * mm, y - 20 * mm, doc["date"])
 
     if include_qr:
-        draw_validation_qr(c, width - margin - 40 * mm, y - 54 * mm, doc, company, size_mm=26)
+        draw_validation_qr(c, width - margin - 46 * mm, y - 64 * mm, doc, company, size_mm=34)
 
-    y -= 70 * mm
+    y -= 84 * mm
     section_title(c, margin, y, "Datos del cliente")
     y -= 8 * mm
     client_lines = [
@@ -678,10 +678,10 @@ def total_line(c, x, y, label, value, bold):
 def draw_validation_qr(c, x, y, doc, company, size_mm: float = 24):
     payload = validation_payload(doc, company)
     size = size_mm * mm
-    quiet_zone = 1.5 * mm
+    quiet_zone = 3 * mm
     c.setFillColor(colors.white)
     c.rect(x - quiet_zone, y - quiet_zone, size + 2 * quiet_zone, size + 2 * quiet_zone, fill=True, stroke=False)
-    qr = QrCodeWidget(payload)
+    qr = QrCodeWidget(payload, barBorder=4, barLevel="H")
     bounds = qr.getBounds()
     drawing = Drawing(size, size, transform=[size / (bounds[2] - bounds[0]), 0, 0, size / (bounds[3] - bounds[1]), 0, 0])
     drawing.add(qr)
