@@ -124,6 +124,8 @@ tr.selected.status-row td { background: #ddecfb; }
 .validation-table th:nth-child(4), .validation-table td:nth-child(4),
 .validation-table th:nth-child(5), .validation-table td:nth-child(5) { width: 118px; }
 .validation-table td { overflow-wrap: anywhere; word-break: normal; }
+.validation-cell-value { display: block; min-width: 0; overflow-wrap: anywhere; }
+.validation-number { overflow-wrap: normal; white-space: nowrap; }
 .validation-observations { background: #f8fafc; border: 1px solid var(--line); border-radius: 6px; color: #334155; margin: 14px 0 0; padding: 12px; }
 
 @media (max-width: 1100px) {
@@ -149,11 +151,14 @@ tr.selected.status-row td { background: #ddecfb; }
   .validation-grid { grid-template-columns: 1fr; }
   .validation-actions { flex-direction: column; }
   .validation-panel { overflow: visible; padding: 14px; }
-  .validation-table { border-collapse: separate; border-spacing: 0 10px; min-width: 0; table-layout: auto; }
+  .validation-table { border-collapse: separate; border-spacing: 0 10px; min-width: 0 !important; table-layout: auto; }
   .validation-table thead { display: none; }
-  .validation-table, .validation-table tbody, .validation-table tr, .validation-table td { display: block; width: 100%; }
+  .validation-table, .validation-table tbody, .validation-table tr, .validation-table td { display: block !important; width: 100% !important; }
+  .validation-table td:nth-child(1), .validation-table td:nth-child(2), .validation-table td:nth-child(3), .validation-table td:nth-child(4), .validation-table td:nth-child(5) { width: 100% !important; }
   .validation-table tr { background: #f8fafc; border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
-  .validation-table td { align-items: start; border-bottom: 1px solid #e5edf5; display: grid; gap: 10px; grid-template-columns: 82px minmax(0, 1fr); padding: 8px 0; white-space: normal; }
+  .validation-table td { border-bottom: 1px solid #e5edf5; padding: 10px 0; white-space: normal; }
   .validation-table td:last-child { border-bottom: 0; }
-  .validation-table td::before { color: var(--muted); content: attr(data-label); font-size: 12px; font-weight: 800; text-transform: uppercase; }
+  .validation-table td::before { color: var(--muted); content: attr(data-label); display: block; font-size: 12px; font-weight: 800; margin-bottom: 4px; text-transform: uppercase; }
+  .validation-cell-value { display: block; line-height: 1.35; width: 100%; }
+  .validation-number { overflow-wrap: normal !important; white-space: nowrap !important; word-break: keep-all; }
 }
