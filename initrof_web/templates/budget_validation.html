@@ -18,7 +18,7 @@
     </header>
 
     {% if submitted %}
-      <section class="validation-result {{ 'success' if document.status == 'Aprobado' else 'danger' }}">
+      <section class="validation-result {{ 'danger' if document.status == 'Rechazado' else 'success' }}">
         <h2>Decision registrada</h2>
         <p>El presupuesto quedo marcado como {{ document.status }}.</p>
       </section>
@@ -47,7 +47,8 @@
         {% if document.status == 'Anulado' %}
           <p class="hint">Este presupuesto fue anulado y no admite validacion.</p>
         {% else %}
-          <form method="post" class="validation-form">
+          <form id="validation-form" method="post" class="validation-form">
+            <p class="hint">Marque los trabajos autorizados. Los que queden sin marcar no se tomaran como aprobados.</p>
             <label>Nombre y apellido</label>
             <input name="signer_name" value="{{ document.contact or '' }}" autocomplete="name">
             <label>DNI / CUIT / cargo</label>
@@ -57,8 +58,8 @@
             <label>Comentario</label>
             <textarea name="comments"></textarea>
             <div class="validation-actions">
-              <button name="decision" value="Aprobado">Aprobar presupuesto</button>
-              <button name="decision" value="Rechazado" class="danger">Rechazar</button>
+              <button name="decision" value="Seleccion">Confirmar seleccion</button>
+              <button name="decision" value="Rechazado" class="danger">Rechazar todo</button>
             </div>
           </form>
         {% endif %}
@@ -69,16 +70,23 @@
       <h2>Detalle</h2>
       <table class="validation-table">
         <thead>
-          <tr><th>Cant.</th><th>Descripcion</th><th>Unidad</th><th>Precio</th><th>Subtotal</th></tr>
+          <tr><th>Autorizar</th><th>Cant.</th><th>Descripcion</th><th>Unidad</th><th>Precio</th><th>Subtotal</th></tr>
         </thead>
         <tbody>
           {% for item in items %}
+            {% set item_approved = item.approved if item.approved is not none else 1 %}
             <tr>
-              <td data-label="Cant.">{{ item.quantity }}</td>
-              <td data-label="Descripcion">{{ item.description }}</td>
-              <td data-label="Unidad">{{ item.unit }}</td>
-              <td data-label="Precio">{{ money(item.unit_price) }}</td>
-              <td data-label="Subtotal">{{ money(item.subtotal) }}</td>
+              <td data-label="Autorizar">
+                <label class="validation-item-check">
+                  <input form="validation-form" type="checkbox" name="approved_item_ids" value="{{ item.id }}" {% if item_approved %}checked{% endif %} {% if document.status == 'Anulado' %}disabled{% endif %}>
+                  <span>{{ 'Autorizado' if item_approved else 'No autorizado' }}</span>
+                </label>
+              </td>
+              <td data-label="Cant."><span class="validation-cell-value validation-number">{{ item.quantity }}</span></td>
+              <td data-label="Descripcion"><span class="validation-cell-value">{{ item.description }}</span></td>
+              <td data-label="Unidad"><span class="validation-cell-value validation-number">{{ item.unit }}</span></td>
+              <td data-label="Precio"><span class="validation-cell-value validation-number">{{ money(item.unit_price) }}</span></td>
+              <td data-label="Subtotal"><span class="validation-cell-value validation-number">{{ money(item.subtotal) }}</span></td>
             </tr>
           {% endfor %}
         </tbody>
