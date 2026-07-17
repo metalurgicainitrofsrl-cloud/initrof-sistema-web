@@ -142,6 +142,13 @@ CREATE TABLE IF NOT EXISTS document_validation_events (
     user_agent TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS document_validation_item_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id INTEGER NOT NULL REFERENCES document_validation_events(id) ON DELETE CASCADE,
+    document_item_id INTEGER NOT NULL REFERENCES document_items(id) ON DELETE CASCADE,
+    approved INTEGER NOT NULL CHECK(approved IN (0,1))
+);
 """
 
 

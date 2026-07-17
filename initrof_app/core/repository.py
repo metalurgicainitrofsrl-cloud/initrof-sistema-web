@@ -207,7 +207,7 @@ def get_or_create_validation_token(document_id: int) -> str:
         if existing:
             return existing["token"]
         while True:
-            token = secrets.token_urlsafe(24)
+            token = secrets.token_urlsafe(16)
             try:
                 conn.execute(
                     "INSERT INTO document_validation_tokens(document_id, token) VALUES (?, ?)",
@@ -250,11 +250,25 @@ def get_document_by_validation_token(token: str):
             (doc["id"],),
         ).fetchone()
         doc["validation_event"] = dict(decision) if decision else None
+        for item in items:
+            item["approved"] = None
+        if decision:
+            item_decisions = conn.execute(
+                "SELECT document_item_id, approved FROM document_validation_item_events WHERE event_id = ?",
+                (decision["id"],),
+            ).fetchall()
+            if item_decisions:
+                approved_by_item = {row["document_item_id"]: row["approved"] for row in item_decisions}
+                for item in items:
+                    item["approved"] = approved_by_item.get(item["id"], 0)
+            else:
+                fallback = 1 if decision["decision"] == "Aprobado" else 0
+                for item in items:
+                    item["approved"] = fallback
         return doc, items
 
 
 def record_document_validation_decision(token: str, data: dict) -> dict | None:
-    decision = "Aprobado" if data.get("decision") == "Aprobado" else "Rechazado"
     document_id = None
     with session() as conn:
         row = conn.execute(
@@ -269,12 +283,38 @@ def record_document_validation_decision(token: str, data: dict) -> dict | None:
         if not row:
             return None
         document_id = row["id"]
+        item_ids = [
+            item["id"]
+            for item in conn.execute("SELECT id FROM document_items WHERE document_id = ? ORDER BY id", (document_id,)).fetchall()
+        ]
+        valid_item_ids = set(item_ids)
+        requested_item_ids = set()
+        for raw_item_id in data.get("approved_item_ids") or []:
+            try:
+                requested_item_ids.add(int(raw_item_id))
+            except (TypeError, ValueError):
+                continue
+        if data.get("decision") == "Rechazado":
+            approved_item_ids = set()
+        else:
+            approved_item_ids = requested_item_ids & valid_item_ids
+        if not item_ids or not approved_item_ids:
+            document_status = "Rechazado"
+        elif len(approved_item_ids) == len(item_ids):
+            document_status = "Aprobado"
+        else:
+            document_status = "Aprobado parcial"
+        decision = "Aprobado" if approved_item_ids else "Rechazado"
+        comments = data.get("comments")
+        if document_status == "Aprobado parcial":
+            summary = f"Items autorizados: {len(approved_item_ids)} de {len(item_ids)}"
+            comments = f"{comments}\n{summary}" if comments else summary
         if row["status"] != "Anulado":
             conn.execute(
                 "UPDATE documents SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                (decision, document_id),
+                (document_status, document_id),
             )
-        conn.execute(
+        event_cursor = conn.execute(
             """
             INSERT INTO document_validation_events
             (document_id, token, decision, signer_name, signer_identifier, signer_email, comments, ip_address, user_agent)
@@ -287,14 +327,20 @@ def record_document_validation_decision(token: str, data: dict) -> dict | None:
                 data.get("signer_name"),
                 data.get("signer_identifier"),
                 data.get("signer_email"),
-                data.get("comments"),
+                comments,
                 data.get("ip_address"),
                 data.get("user_agent"),
             ),
         )
+        event_id = event_cursor.lastrowid
+        for item_id in item_ids:
+            conn.execute(
+                "INSERT INTO document_validation_item_events(event_id, document_item_id, approved) VALUES (?, ?, ?)",
+                (event_id, item_id, 1 if item_id in approved_item_ids else 0),
+            )
         conn.execute(
             "INSERT INTO history(entity_type, entity_id, action, detail) VALUES ('Presupuesto', ?, ?, ?)",
-            (document_id, f"Validacion digital: {decision}", row["number"]),
+            (document_id, f"Validacion digital: {document_status}", row["number"]),
         )
     doc, items = get_document_by_validation_token(token)
     return {"document": doc, "items": items}
