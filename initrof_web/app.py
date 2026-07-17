@@ -97,6 +97,11 @@ def logo():
     return FileResponse(path)
 
 
+@app.get("/v/{token}")
+def short_validation_link(token: str):
+    return RedirectResponse(f"/validar/presupuesto/{token}", status_code=303)
+
+
 @app.get("/validar/presupuesto/{token}", response_class=HTMLResponse)
 def public_budget_validation_page(request: Request, token: str):
     doc, items = repo.get_document_by_validation_token(token)
@@ -118,25 +123,24 @@ def public_budget_validation_page(request: Request, token: str):
 
 
 @app.post("/validar/presupuesto/{token}", response_class=HTMLResponse)
-def public_budget_validation_submit(
+async def public_budget_validation_submit(
     request: Request,
     token: str,
-    decision: str = Form(...),
-    signer_name: str = Form(""),
-    signer_identifier: str = Form(""),
-    signer_email: str = Form(""),
-    comments: str = Form(""),
 ):
-    if decision not in {"Aprobado", "Rechazado"}:
+    form = await request.form()
+    decision = str(form.get("decision") or "Seleccion")
+    if decision not in {"Seleccion", "Aprobado", "Rechazado"}:
         raise HTTPException(400, "Decision invalida")
+    approved_item_ids = form.getlist("approved_item_ids")
     result = repo.record_document_validation_decision(
         token,
         {
             "decision": decision,
-            "signer_name": signer_name.strip(),
-            "signer_identifier": signer_identifier.strip(),
-            "signer_email": signer_email.strip(),
-            "comments": comments.strip(),
+            "approved_item_ids": approved_item_ids,
+            "signer_name": str(form.get("signer_name") or "").strip(),
+            "signer_identifier": str(form.get("signer_identifier") or "").strip(),
+            "signer_email": str(form.get("signer_email") or "").strip(),
+            "comments": str(form.get("comments") or "").strip(),
             "ip_address": request.client.host if request.client else "",
             "user_agent": request.headers.get("user-agent", ""),
         },
