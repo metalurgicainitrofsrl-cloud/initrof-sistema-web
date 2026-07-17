@@ -330,7 +330,7 @@ async function selectDocument(type, id) {
 function renderDocumentForm(type, doc = {}, items = null) {
   const key = type === "Presupuesto" ? "budget" : "delivery";
   const statuses = type === "Presupuesto"
-    ? ["Borrador", "Enviado", "Aprobado", "Rechazado", "Anulado"]
+    ? ["Borrador", "Enviado", "Aprobado", "Aprobado parcial", "Rechazado", "Anulado"]
     : ["Pendiente", "Entregado", "Facturado", "Anulado"];
   const currentItems = items || [{ quantity: 1, description: "", unit: "u", unit_price: 0 }];
   const voidButton = state.selected[key] ? `<button type="button" class="danger" id="${key}-void">Anular ${type.toLowerCase()}</button>` : "";
